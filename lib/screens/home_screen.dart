@@ -6,6 +6,8 @@ import 'package:diacare/screens/activity_history_screen.dart';
 import 'package:diacare/screens/blood_sugar_history_screen.dart';
 import 'package:diacare/screens/profile_screen.dart';
 import 'package:diacare/screens/reminders_screen.dart';
+import 'package:diacare/screens/ai_assistant_screen.dart';
+import 'package:diacare/screens/meal_tab.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -93,7 +95,10 @@ class HomeScreen extends StatelessWidget {
                             minHeight: 175,
                             verticalLayout: true,
                             onTap: () {
-                              // TODO: navigate to meal screen
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (_) => const MealTab()),
+                              );
                             },
                           ),
                         ),
@@ -155,7 +160,10 @@ class HomeScreen extends StatelessWidget {
                       wide: true,
                       isAi: true,
                       onTap: () {
-                        // TODO: navigate to AI screen / tips
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const AiAssistantScreen()),
+                        );
                       },
                     ),
 

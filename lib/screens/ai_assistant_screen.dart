@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 
-class MealTab extends StatelessWidget {
-  const MealTab({super.key});
+class AiAssistantScreen extends StatelessWidget {
+  const AiAssistantScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Meals'),
+        title: const Text('Personal Assistant'),
       ),
       body: const Center(
-        child: Text('Meal Logging Screen'),
+        child: Text('AI Assistant Screen'),
       ),
     );
   }

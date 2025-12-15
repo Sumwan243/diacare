@@ -28,8 +28,7 @@ Future<void> main() async {
 
   await MigrationUtil.cleanupOldReminders();
 
-  // Temporarily commented out to debug the startup issue.
-  // await NotificationService().init();
+  await NotificationService().init();
 
   runApp(const MyApp());
 }
