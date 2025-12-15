@@ -22,12 +22,14 @@ Future<void> main() async {
   await Hive.openBox('userProfile');
   await Hive.openBox('medications');
   await Hive.openBox('meals');
-  await Hive.openBox('blood_sugar_box'); // New box
-  await Hive.openBox('activity_box');    // New box
+  await Hive.openBox('blood_sugar_box');
+  await Hive.openBox('activity_box');
   await Hive.openBox('glucose');
 
   await MigrationUtil.cleanupOldReminders();
-  await NotificationService().init();
+
+  // Temporarily commented out to debug the startup issue.
+  // await NotificationService().init();
 
   runApp(const MyApp());
 }
@@ -41,9 +43,9 @@ class MyApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => UserProfileProvider()),
         ChangeNotifierProvider(create: (_) => MedicationProvider()),
-        ChangeNotifierProvider(create: (_) => GlucoseProvider()), // Keep old one for now
-        ChangeNotifierProvider(create: (_) => BloodSugarProvider()), // New provider
-        ChangeNotifierProvider(create: (_) => ActivityProvider()),   // New provider
+        ChangeNotifierProvider(create: (_) => GlucoseProvider()),
+        ChangeNotifierProvider(create: (_) => BloodSugarProvider()),
+        ChangeNotifierProvider(create: (_) => ActivityProvider()),
       ],
       child: Consumer<GlucoseProvider>(
         builder: (context, glucoseProvider, child) {
