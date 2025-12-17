@@ -19,6 +19,7 @@ dependencies:
   http: ^1.6.0
   intl: ^0.18.1 # Added for date formatting
 
+  collection: any
 dev_dependencies:
   flutter_test:
     sdk: flutter

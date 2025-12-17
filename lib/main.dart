@@ -1,6 +1,7 @@
 import 'package:diacare/providers/activity_provider.dart';
 import 'package:diacare/providers/blood_sugar_provider.dart';
 import 'package:diacare/providers/glucose_provider.dart';
+import 'package:diacare/providers/meal_provider.dart';
 import 'package:diacare/providers/medication_provider.dart';
 import 'package:diacare/providers/user_profile_provider.dart';
 import 'package:diacare/utils/migration_util.dart';
@@ -18,13 +19,18 @@ Future<void> main() async {
   final appDocDir = await getApplicationDocumentsDirectory();
   await Hive.initFlutter(appDocDir.path);
 
-  // Open boxes
+  // Open all necessary boxes on startup
   await Hive.openBox('userProfile');
   await Hive.openBox('medications');
   await Hive.openBox('meals');
   await Hive.openBox('blood_sugar_box');
   await Hive.openBox('activity_box');
   await Hive.openBox('glucose');
+  await Hive.openBox('meal_logs_box');
+  await Hive.openBox('custom_foods_box');
+  await Hive.openBox('usda_food_cache_box');
+  await Hive.openBox('dish_nutrition_cache_box');
+  await Hive.openBox('dish_ingredient_resolution_box');
 
   await MigrationUtil.cleanupOldReminders();
 
@@ -45,6 +51,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => GlucoseProvider()),
         ChangeNotifierProvider(create: (_) => BloodSugarProvider()),
         ChangeNotifierProvider(create: (_) => ActivityProvider()),
+        ChangeNotifierProvider(create: (_) => MealProvider()),
       ],
       child: Consumer<GlucoseProvider>(
         builder: (context, glucoseProvider, child) {

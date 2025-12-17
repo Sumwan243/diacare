@@ -10,14 +10,42 @@ class BloodSugarProvider extends ChangeNotifier {
     return _box.values
         .map((e) => BloodSugarEntry.fromMap(Map<String, dynamic>.from(e as Map)))
         .toList()
-      ..sort((a, b) => b.timestamp.compareTo(a.timestamp)); // Sort descending
+      ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
   }
 
   Future<void> addEntry(int level, String context, DateTime timestamp) async {
     final id = const Uuid().v4();
-    final entry = BloodSugarEntry(id: id, level: level, context: context, timestamp: timestamp);
+    final entry = BloodSugarEntry(
+      id: id,
+      level: level,
+      context: context,
+      timestamp: timestamp,
+    );
     await _box.put(id, entry.toMap());
     notifyListeners();
+  }
+
+  /// Upsert using the entry's existing id.
+  /// This is essential for edit + undo delete (keeps the same record id).
+  Future<void> upsertEntry(BloodSugarEntry entry) async {
+    await _box.put(entry.id, entry.toMap());
+    notifyListeners();
+  }
+
+  /// Convenience: update fields on an existing entry by id.
+  Future<void> updateEntry({
+    required String id,
+    required int level,
+    required String context,
+    required DateTime timestamp,
+  }) async {
+    final updated = BloodSugarEntry(
+      id: id,
+      level: level,
+      context: context,
+      timestamp: timestamp,
+    );
+    await upsertEntry(updated);
   }
 
   Future<void> deleteEntry(String id) async {
@@ -30,7 +58,6 @@ class BloodSugarProvider extends ChangeNotifier {
     return entries.first;
   }
 
-  // Example of a more complex data query
   Map<String, double> getWeeklyTrend() {
     final Map<String, List<int>> weeklyData = {};
     final now = DateTime.now();
@@ -38,7 +65,7 @@ class BloodSugarProvider extends ChangeNotifier {
 
     for (final entry in entries) {
       if (entry.timestamp.isAfter(weekAgo)) {
-        final day = entry.timestamp.weekday.toString(); // Group by weekday
+        final day = entry.timestamp.weekday.toString();
         weeklyData.putIfAbsent(day, () => []).add(entry.level);
       }
     }

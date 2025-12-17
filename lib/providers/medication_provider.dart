@@ -1,8 +1,8 @@
+import 'package:diacare/models/medication_reminder.dart';
+import 'package:diacare/utils/notifications.dart';
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
-import 'package:permission_handler/permission_handler.dart'; // Import permission handler
-import '../models/medication_reminder.dart';
-import '../utils/notifications.dart';
+import 'package:permission_handler/permission_handler.dart'; // Missing import added
 
 // Generates a unique integer ID for a notification.
 int _notificationId(String medicationId, TimeOfDay time) {
@@ -12,10 +12,21 @@ int _notificationId(String medicationId, TimeOfDay time) {
 class MedicationProvider extends ChangeNotifier {
   final Box _box = Hive.box('medications');
 
+  // This getter is now robust and will not crash on bad data.
   List<MedicationReminder> get reminders {
-    return _box.values
-        .map((e) => MedicationReminder.fromMap(Map<String, dynamic>.from(e as Map)))
-        .toList();
+    final List<MedicationReminder> validReminders = [];
+    for (final key in _box.keys) {
+      try {
+        final value = _box.get(key);
+        if (value != null && value is Map) {
+          validReminders.add(MedicationReminder.fromMap(Map<String, dynamic>.from(value)));
+        }
+      } catch (e) {
+        // If an entry is malformed, print an error and safely skip it.
+        debugPrint('Could not parse reminder with key $key. It may be from an old version. Error: $e');
+      }
+    }
+    return validReminders;
   }
 
   Future<void> addMedication({
@@ -28,13 +39,10 @@ class MedicationProvider extends ChangeNotifier {
     final medication = MedicationReminder(id: id, name: name, pillsPerDose: pills, times: times, isEnabled: isEnabled);
 
     if (isEnabled) {
-      // Request permission before scheduling
       if (await Permission.scheduleExactAlarm.request().isGranted) {
         for (final time in times) {
           await NotificationService().scheduleDaily(medication, time, _notificationId(id, time));
         }
-      } else {
-        debugPrint('Exact alarm permission not granted. Cannot schedule notifications.');
       }
     }
 
@@ -56,8 +64,6 @@ class MedicationProvider extends ChangeNotifier {
         for (final time in updatedMedication.times) {
           await NotificationService().scheduleDaily(updatedMedication, time, _notificationId(updatedMedication.id, time));
         }
-      } else {
-        debugPrint('Exact alarm permission not granted. Cannot schedule notifications.');
       }
     }
 
@@ -66,18 +72,13 @@ class MedicationProvider extends ChangeNotifier {
   }
 
   Future<void> toggleMedicationStatus(String medicationId) async {
-    final reminderMap = _box.get(medicationId) as Map?;
-    if (reminderMap == null) return;
-    final reminder = MedicationReminder.fromMap(Map<String, dynamic>.from(reminderMap));
+    final reminder = reminders.firstWhere((r) => r.id == medicationId);
     final updatedReminder = reminder.copyWith(isEnabled: !reminder.isEnabled);
     await updateMedication(updatedReminder);
   }
 
   Future<void> deleteReminder(String medicationId) async {
-    final reminderMap = _box.get(medicationId) as Map?;
-    if (reminderMap == null) return;
-    final reminder = MedicationReminder.fromMap(Map<String, dynamic>.from(reminderMap));
-
+    final reminder = reminders.firstWhere((r) => r.id == medicationId);
     for (final time in reminder.times) {
       await NotificationService().cancelById(_notificationId(reminder.id, time));
     }

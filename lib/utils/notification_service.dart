@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:timezone/data/latest_all.dart' as tz;
+import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
+
 import '../models/medication_reminder.dart';
 
 class NotificationService {
@@ -17,8 +18,8 @@ class NotificationService {
   Future<void> init() async {
     if (_initialized) return;
 
-    // Use the recommended, modern way to initialize timezone data.
-    tz.initializeTimeZones();
+    // initializeTimeZones() returns void (sync), so don't await it.
+    tzdata.initializeTimeZones();
 
     const AndroidInitializationSettings androidInit =
     AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -39,6 +40,7 @@ class NotificationService {
     final android =
     _plugin.resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>();
+
     await android?.requestNotificationsPermission();
 
     _initialized = true;
@@ -54,10 +56,11 @@ class NotificationService {
       await init();
     }
 
-    final now = tz.TZDateTime.now(tz.local);
+    final tz.Location location = tz.local;
+    final tz.TZDateTime now = tz.TZDateTime.now(location);
 
-    var scheduled = tz.TZDateTime(
-      tz.local,
+    tz.TZDateTime scheduled = tz.TZDateTime(
+      location,
       now.year,
       now.month,
       now.day,
