@@ -16,10 +16,11 @@ dependencies:
   flutter_local_notifications: ^17.1.2
   timezone: ^0.9.2
   permission_handler: ^11.3.1
-  http: ^1.6.0
-  intl: ^0.18.1 # Added for date formatting
+  http: ^1.2.0
+  intl: ^0.18.1
+  collection: ^1.17.0
+  crypto: ^3.0.3
 
-  collection: any
 dev_dependencies:
   flutter_test:
     sdk: flutter

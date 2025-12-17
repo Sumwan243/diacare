@@ -1,3 +1,4 @@
+/// A generic model to hold macronutrient data.
 class FoodNutrients {
   final double caloriesKcal;
   final double carbsG;
@@ -6,52 +7,39 @@ class FoodNutrients {
   final double fatG;
 
   const FoodNutrients({
-    required this.caloriesKcal,
-    required this.carbsG,
-    required this.fiberG,
-    required this.proteinG,
-    required this.fatG,
+    this.caloriesKcal = 0,
+    this.carbsG = 0,
+    this.fiberG = 0,
+    this.proteinG = 0,
+    this.fatG = 0,
   });
 
-  static const zero = FoodNutrients(
-    caloriesKcal: 0,
-    carbsG: 0,
-    fiberG: 0,
-    proteinG: 0,
-    fatG: 0,
-  );
-
-  FoodNutrients operator +(FoodNutrients other) => FoodNutrients(
-    caloriesKcal: caloriesKcal + other.caloriesKcal,
-    carbsG: carbsG + other.carbsG,
-    fiberG: fiberG + other.fiberG,
-    proteinG: proteinG + other.proteinG,
-    fatG: fatG + other.fatG,
-  );
-
-  FoodNutrients scale(double factor) => FoodNutrients(
-    caloriesKcal: caloriesKcal * factor,
-    carbsG: carbsG * factor,
-    fiberG: fiberG * factor,
-    proteinG: proteinG * factor,
-    fatG: fatG * factor,
-  );
-
-  double get netCarbsG => (carbsG - fiberG).clamp(0, double.infinity);
+  /// Returns a new FoodNutrients object with all values scaled by a factor.
+  FoodNutrients scale(double factor) {
+    return FoodNutrients(
+      caloriesKcal: caloriesKcal * factor,
+      carbsG: carbsG * factor,
+      fiberG: fiberG * factor,
+      proteinG: proteinG * factor,
+      fatG: fatG * factor,
+    );
+  }
 
   Map<String, dynamic> toMap() => {
-    'caloriesKcal': caloriesKcal,
-    'carbsG': carbsG,
-    'fiberG': fiberG,
-    'proteinG': proteinG,
-    'fatG': fatG,
-  };
+        'kcal': caloriesKcal,
+        'carbs_g': carbsG,
+        'fiber_g': fiberG,
+        'protein_g': proteinG,
+        'fat_g': fatG,
+      };
 
-  factory FoodNutrients.fromMap(Map<String, dynamic> map) => FoodNutrients(
-    caloriesKcal: (map['caloriesKcal'] as num?)?.toDouble() ?? 0,
-    carbsG: (map['carbsG'] as num?)?.toDouble() ?? 0,
-    fiberG: (map['fiberG'] as num?)?.toDouble() ?? 0,
-    proteinG: (map['proteinG'] as num?)?.toDouble() ?? 0,
-    fatG: (map['fatG'] as num?)?.toDouble() ?? 0,
-  );
+  factory FoodNutrients.fromMap(Map<String, dynamic> map) {
+    return FoodNutrients(
+      caloriesKcal: (map['kcal'] as num?)?.toDouble() ?? 0,
+      carbsG: (map['carbs_g'] as num?)?.toDouble() ?? 0,
+      fiberG: (map['fiber_g'] as num?)?.toDouble() ?? 0,
+      proteinG: (map['protein_g'] as num?)?.toDouble() ?? 0,
+      fatG: (map['fat_g'] as num?)?.toDouble() ?? 0,
+    );
+  }
 }
