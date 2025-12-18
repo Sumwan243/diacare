@@ -12,11 +12,9 @@ import 'package:provider/provider.dart';
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
-  // Fixed heights to prevent text scaling from breaking alignment.
   static const double _kSmallCardHeight = 112;
   static const double _kInnerGap = 12;
   static const double _kTallCardHeight = (_kSmallCardHeight * 2) + _kInnerGap;
-
   static const double _kWideCardHeight = 128;
 
   @override
@@ -24,19 +22,17 @@ class HomeScreen extends StatelessWidget {
     final bloodSugarProv = context.watch<BloodSugarProvider>();
     final activityProv = context.watch<ActivityProvider>();
     final profile = context.watch<UserProfileProvider>().userProfile;
+
+    final latest = bloodSugarProv.getLatestEntry();
+    final todaySummary = activityProv.getTodaySummary();
+    final int duration = todaySummary['duration'] ?? 0;
+
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: Text(
-          profile != null ? 'Welcome, ${profile.name}' : 'Welcome',
-          style: theme.textTheme.headlineSmall?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: theme.colorScheme.onSurface,
-          ),
-        ),
+        title: Text(profile != null ? 'Welcome, ${profile.name}' : 'Welcome'),
         actions: [
           IconButton(
             icon: const Icon(Icons.person_outline),
@@ -58,12 +54,12 @@ class HomeScreen extends StatelessWidget {
                   title: 'Medication',
                   subtitle: 'View & manage reminders',
                   icon: Icons.medication,
-                  color: theme.colorScheme.primary,
+                  color: cs.primary,
+                  wide: true,
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(builder: (_) => const RemindersScreen()),
                   ),
-                  wide: true,
                 ),
               ),
               const SizedBox(height: 16),
@@ -78,14 +74,12 @@ class HomeScreen extends StatelessWidget {
                         title: 'Meals',
                         subtitle: 'Log today’s intake',
                         icon: Icons.soup_kitchen,
-                        color: Colors.orangeAccent,
+                        color: cs.tertiary,
                         verticalLayout: true,
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const MealTab()),
-                          );
-                        },
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const MealTab()),
+                        ),
                       ),
                     ),
                   ),
@@ -97,11 +91,11 @@ class HomeScreen extends StatelessWidget {
                           height: _kSmallCardHeight,
                           child: _DashboardCard(
                             title: 'Blood Tracker',
-                            subtitle: bloodSugarProv.getLatestEntry() != null
-                                ? '${bloodSugarProv.getLatestEntry()!.level} mg/dL'
+                            subtitle: latest != null
+                                ? '${latest.level} mg/dL'
                                 : 'No readings',
                             icon: Icons.water_drop,
-                            color: Colors.blueAccent,
+                            color: cs.secondary,
                             onTap: () => Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -115,11 +109,9 @@ class HomeScreen extends StatelessWidget {
                           height: _kSmallCardHeight,
                           child: _DashboardCard(
                             title: 'Physical Activity',
-                            subtitle: activityProv.getTodaySummary()['duration']! > 0
-                                ? '${activityProv.getTodaySummary()['duration']} mins'
-                                : 'Log activity',
+                            subtitle: duration > 0 ? '$duration mins' : 'Log activity',
                             icon: Icons.directions_run,
-                            color: Colors.green,
+                            color: cs.primary,
                             onTap: () => Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -142,7 +134,7 @@ class HomeScreen extends StatelessWidget {
                   title: 'Personal Assistant',
                   subtitle: 'Ask about meals, symptoms, exercise',
                   icon: Icons.auto_awesome,
-                  color: Colors.teal,
+                  color: cs.primary,
                   wide: true,
                   isAi: true,
                   onTap: () {},
@@ -150,7 +142,7 @@ class HomeScreen extends StatelessWidget {
               ),
 
               const SizedBox(height: 16),
-              _WeeklyProgressCard(),
+              const _WeeklyProgressCard(),
             ],
           ),
         ),
@@ -160,68 +152,73 @@ class HomeScreen extends StatelessWidget {
 }
 
 class _WeeklyProgressCard extends StatelessWidget {
+  const _WeeklyProgressCard();
+
   @override
   Widget build(BuildContext context) {
     final activityProv = context.watch<ActivityProvider>();
     final completedDays = activityProv.getDaysWithActivityThisWeek();
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
 
-    return Container(
-      padding: const EdgeInsets.all(20.0),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: theme.colorScheme.shadow.withOpacity(0.08),
-            blurRadius: 24,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
-                .map((day) => _buildDayCheck(day, completedDays.contains(day)))
-                .toList(),
-          ),
-          const Divider(height: 32, thickness: 0.5, indent: 16, endIndent: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.local_florist_outlined, color: Colors.green.shade300, size: 28),
-              const SizedBox(width: 12),
-              Flexible(
-                child: Text(
-                  'Consistency is key. Keep up the great work!',
-                  style: theme.textTheme.bodyMedium,
+    return _SurfaceCard(
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: const ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
+                  .map((day) => _DayCheck(day: day, isCompleted: completedDays.contains(day)))
+                  .toList(),
+            ),
+            const Divider(height: 32, thickness: 0.5, indent: 16, endIndent: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.local_florist_outlined, color: cs.tertiary, size: 28),
+                const SizedBox(width: 12),
+                Flexible(
+                  child: Text(
+                    'Consistency is key. Keep up the great work!',
+                    style: theme.textTheme.bodyMedium,
+                  ),
                 ),
-              ),
-            ],
-          )
-        ],
+              ],
+            )
+          ],
+        ),
       ),
     );
   }
+}
 
-  Widget _buildDayCheck(String day, bool isCompleted) {
+class _DayCheck extends StatelessWidget {
+  final String day;
+  final bool isCompleted;
+
+  const _DayCheck({required this.day, this.isCompleted = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    final borderColor = isCompleted ? Colors.transparent : cs.outline.withOpacity(0.6);
+    final fillColor = isCompleted ? cs.primary : Colors.transparent;
+    final labelColor = isCompleted ? cs.onSurface : cs.onSurfaceVariant;
+
     return Column(
       children: [
         Container(
           padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: isCompleted ? Colors.green : Colors.transparent,
-            border: Border.all(
-              color: isCompleted ? Colors.transparent : Colors.grey.shade300,
-              width: 2,
-            ),
+            color: fillColor,
+            border: Border.all(color: borderColor, width: 2),
           ),
           child: Icon(
             Icons.check,
-            color: isCompleted ? Colors.white : Colors.transparent,
+            color: isCompleted ? cs.onPrimary : Colors.transparent,
             size: 18,
           ),
         ),
@@ -229,11 +226,56 @@ class _WeeklyProgressCard extends StatelessWidget {
         Text(
           day.toUpperCase(),
           style: TextStyle(
-            color: isCompleted ? Colors.black87 : Colors.grey,
+            color: labelColor,
             fontWeight: isCompleted ? FontWeight.bold : FontWeight.normal,
           ),
         ),
       ],
+    );
+  }
+}
+
+class _SurfaceCard extends StatelessWidget {
+  final Widget child;
+  final VoidCallback? onTap;
+  final BorderSide? extraSide;
+
+  const _SurfaceCard({
+    required this.child,
+    this.onTap,
+    this.extraSide,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
+    final Color cardColor = isDark
+        ? Color.alphaBlend(cs.onSurface.withOpacity(0.06), cs.surface)
+        : cs.surface;
+
+    final side = extraSide ??
+        BorderSide(
+          color: cs.outline.withOpacity(isDark ? 0.35 : 0.18),
+          width: 1,
+        );
+
+    return Material(
+      color: cardColor,
+      elevation: isDark ? 1.5 : 2.5,
+      shadowColor: cs.shadow.withOpacity(isDark ? 0.55 : 0.14),
+      surfaceTintColor: cs.surfaceTint.withOpacity(isDark ? 0.18 : 0.08),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+        side: side,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: child,
+      ),
     );
   }
 }
@@ -262,35 +304,23 @@ class _DashboardCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface, // keep consistent background
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: theme.colorScheme.shadow.withOpacity(0.08),
-            blurRadius: 24,
-            offset: const Offset(0, 8),
-          ),
-        ],
-        border: isAi ? Border.all(color: color.withOpacity(0.45), width: 1) : null,
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(24),
-          child: Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: verticalLayout ? _buildVertical(context) : _buildHorizontal(context),
-          ),
-        ),
+    final aiSide = isAi
+        ? BorderSide(color: color.withOpacity(0.55), width: 1.2)
+        : null;
+
+    return _SurfaceCard(
+      onTap: onTap,
+      extraSide: aiSide,
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: verticalLayout ? _buildVertical(context, cs) : _buildHorizontal(context, cs),
       ),
     );
   }
 
-  Widget _buildVertical(BuildContext context) {
+  Widget _buildVertical(BuildContext context, ColorScheme cs) {
     final theme = Theme.of(context);
 
     return Column(
@@ -300,14 +330,12 @@ class _DashboardCard extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.12),
+            color: cs.secondaryContainer, // THEME-AWARE FIX
             shape: BoxShape.circle,
           ),
           child: Icon(icon, color: color, size: 32),
         ),
         const SizedBox(height: 14),
-
-        // Keep title stable under large text scale
         Text(
           title,
           style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
@@ -319,7 +347,7 @@ class _DashboardCard extends StatelessWidget {
         Text(
           subtitle,
           style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
+            color: cs.onSurfaceVariant,
           ),
           textAlign: TextAlign.center,
           maxLines: 2,
@@ -330,12 +358,8 @@ class _DashboardCard extends StatelessWidget {
     );
   }
 
-  Widget _buildHorizontal(BuildContext context) {
+  Widget _buildHorizontal(BuildContext context, ColorScheme cs) {
     final theme = Theme.of(context);
-
-    // Smaller, more stable typography for dashboard cards
-    final titleStyle = (wide ? theme.textTheme.titleLarge : theme.textTheme.titleMedium)
-        ?.copyWith(fontWeight: FontWeight.bold);
 
     return Row(
       children: [
@@ -346,7 +370,8 @@ class _DashboardCard extends StatelessWidget {
             children: [
               Text(
                 title,
-                style: titleStyle,
+                style: (wide ? theme.textTheme.titleLarge : theme.textTheme.titleMedium)
+                    ?.copyWith(fontWeight: FontWeight.bold),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -354,7 +379,7 @@ class _DashboardCard extends StatelessWidget {
               Text(
                 subtitle,
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+                  color: cs.onSurfaceVariant,
                 ),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
@@ -366,8 +391,8 @@ class _DashboardCard extends StatelessWidget {
         Container(
           padding: EdgeInsets.all(wide ? 16 : 12),
           decoration: BoxDecoration(
+            color: cs.secondaryContainer, // THEME-AWARE FIX
             shape: BoxShape.circle,
-            color: color.withOpacity(0.12),
           ),
           child: Icon(icon, color: color, size: 24),
         ),

@@ -15,14 +15,12 @@ class RemindersScreen extends StatefulWidget {
 
 class _RemindersScreenState extends State<RemindersScreen> {
   void _navigateAndRefresh(Widget screen) {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => screen)).then((_) {
-      setState(() {});
-    });
+    Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
   }
 
   @override
   Widget build(BuildContext context) {
-    // Watch both providers
+    final theme = Theme.of(context);
     final medProv = context.watch<MedicationProvider>();
     final logProv = context.watch<MedicationLogProvider>();
 
@@ -33,23 +31,22 @@ class _RemindersScreenState extends State<RemindersScreen> {
     final groupedReminders = groupBy(allReminders, (reminder) => (reminder['time'] as TimeOfDay).format(context));
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFAF5F8),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
+          icon: const Icon(Icons.arrow_back_ios),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('Today', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 28)),
+        title: Text('Today', style: theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold)),
         centerTitle: true,
         actions: [
-          IconButton(onPressed: () {}, icon: const Icon(Icons.notifications_none_outlined, color: Colors.black)),
+          IconButton(onPressed: () {}, icon: const Icon(Icons.notifications_none_outlined)),
         ],
       ),
       body: Column(
         children: [
-          _buildAddReminderCard(),
+          _buildAddReminderCard(theme),
           const SizedBox(height: 16),
           Expanded(
             child: ListView(
@@ -66,17 +63,12 @@ class _RemindersScreenState extends State<RemindersScreen> {
                     children: [
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 16.0),
-                        child: Text(entry.key, style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, fontSize: 16)),
+                        child: Text(entry.key, style: theme.textTheme.titleMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
                       ),
-                      ...entry.value.map((r) => _buildReminderCard(r['medication'] as MedicationReminder, r['time'] as TimeOfDay, logProv)).toList(),
+                      ...entry.value.map((r) => _buildReminderCard(r['medication'] as MedicationReminder, r['time'] as TimeOfDay, logProv, theme)).toList(),
                     ],
                   );
                 }).toList(),
-                if (groupedReminders.isNotEmpty) ...[
-                  const SizedBox(height: 20),
-                  // Confirm all button can be added back here if needed
-                  const SizedBox(height: 40),
-                ]
               ],
             ),
           ),
@@ -85,23 +77,21 @@ class _RemindersScreenState extends State<RemindersScreen> {
     );
   }
 
-  Widget _buildAddReminderCard() {
+  Widget _buildAddReminderCard(ThemeData theme) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0),
       child: Card(
-        elevation: 2,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         child: InkWell(
           onTap: () => _navigateAndRefresh(const AddMedicationScreen()),
           borderRadius: BorderRadius.circular(12),
-          child: const Padding(
-            padding: EdgeInsets.all(20.0),
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.add_circle_outline, color: Colors.redAccent, size: 28),
-                SizedBox(width: 16),
-                Text('Add Medication Reminder', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                Icon(Icons.add_circle_outline, color: theme.colorScheme.primary, size: 28),
+                const SizedBox(width: 16),
+                Text('Add Medication Reminder', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
               ],
             ),
           ),
@@ -110,36 +100,32 @@ class _RemindersScreenState extends State<RemindersScreen> {
     );
   }
 
-  Widget _buildReminderCard(MedicationReminder medication, TimeOfDay time, MedicationLogProvider logProv) {
+  Widget _buildReminderCard(MedicationReminder medication, TimeOfDay time, MedicationLogProvider logProv, ThemeData theme) {
     final isChecked = logProv.isDoseTaken(medication.id, time);
 
-    return Opacity(
-      opacity: isChecked ? 0.6 : 1.0,
-      child: Card(
-        elevation: isChecked ? 1 : 2,
-        margin: const EdgeInsets.symmetric(vertical: 6),
-        color: isChecked ? Colors.grey.shade200 : Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        child: ListTile(
-          onTap: () => logProv.logDose(medication.id, time, !isChecked),
-          onLongPress: () => _navigateAndRefresh(AddMedicationScreen(reminder: medication)),
-          leading: Icon(Icons.medication, color: Colors.redAccent.withOpacity(isChecked ? 0.5 : 1.0)),
-          title: Text(
-            medication.name,
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: isChecked ? Colors.black54 : Colors.redAccent,
-              decoration: isChecked ? TextDecoration.lineThrough : null,
-            ),
+    return Card(
+      color: isChecked ? theme.colorScheme.surfaceContainerHighest : theme.colorScheme.surface,
+      elevation: isChecked ? 0 : 2,
+      child: ListTile(
+        onTap: () => logProv.logDose(medication.id, time, !isChecked),
+        onLongPress: () => _navigateAndRefresh(AddMedicationScreen(reminder: medication)),
+        leading: Icon(Icons.medication, color: theme.colorScheme.primary),
+        title: Text(
+          medication.name,
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: isChecked ? theme.colorScheme.onSurfaceVariant : theme.colorScheme.primary,
+            decoration: isChecked ? TextDecoration.lineThrough : null,
+            decorationThickness: 2,
           ),
-          subtitle: Text('${medication.pillsPerDose} tablet(s)'),
-          trailing: Checkbox(
-            value: isChecked,
-            onChanged: (val) => logProv.logDose(medication.id, time, val ?? false),
-            activeColor: Colors.redAccent,
-            shape: const CircleBorder(),
-            side: BorderSide(color: Colors.redAccent.withOpacity(0.5), width: 2),
-          ),
+        ),
+        subtitle: Text('${medication.pillsPerDose} tablet(s)'),
+        trailing: Checkbox(
+          value: isChecked,
+          onChanged: (val) => logProv.logDose(medication.id, time, val ?? false),
+          activeColor: theme.colorScheme.primary,
+          shape: const CircleBorder(),
+          side: BorderSide(color: theme.colorScheme.outline, width: 2),
         ),
       ),
     );

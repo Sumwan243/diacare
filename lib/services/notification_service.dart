@@ -25,7 +25,7 @@ class NotificationService {
   static const String _actionTaken = 'TAKEN';
   static const String _actionSnooze10 = 'SNOOZE_10';
 
-  // Intake log box (make sure you open this box in your initializer)
+  // Intake log box
   static const String _intakeBoxName = 'med_intake_log_box';
 
   Future<void> init() async {
@@ -76,12 +76,6 @@ class NotificationService {
     _initialized = true;
   }
 
-  /// Schedules primary + escalation notifications for the next [daysAhead] days.
-  ///
-  /// IMPORTANT:
-  /// - This is NOT using `matchDateTimeComponents` (repeat), because we need to
-  ///   cancel ONLY today's escalation if the user taps "Taken".
-  /// - `baseId` must be stable per (reminder + timeIndex).
   Future<void> scheduleDailySeries({
     required MedicationReminder reminder,
     required TimeOfDay time,
@@ -119,7 +113,6 @@ class NotificationService {
 
       final escalationTime = day.add(escalationDelay);
 
-      // Try exact schedule; fallback to inexact if exact alarms are restricted.
       await _scheduleWithFallback(
         id: primaryId,
         title: 'Medication Reminder',
@@ -140,7 +133,6 @@ class NotificationService {
     }
   }
 
-  /// Cancels primary + escalation notifications for the next [daysAhead] days.
   Future<void> cancelDailySeries({
     required int baseId,
     int daysAhead = 7,
@@ -160,36 +152,6 @@ class NotificationService {
     }
   }
 
-  Future<void> cancelById(int id) async {
-    await _plugin.cancel(id);
-  }
-
-  Future<void> showInstantNotification({
-    required String title,
-    required String body,
-  }) async {
-    if (!_initialized) await init();
-
-    final int id = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-
-    await _plugin.show(
-      id,
-      title,
-      body,
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'instant',
-          'Instant Alerts',
-          importance: Importance.max,
-          priority: Priority.high,
-        ),
-        iOS: DarwinNotificationDetails(),
-      ),
-    );
-  }
-
-  // ---------- Internals ----------
-
   NotificationDetails _primaryDetails() {
     return const NotificationDetails(
       android: AndroidNotificationDetails(
@@ -204,7 +166,6 @@ class NotificationService {
           AndroidNotificationAction(
             _actionTaken,
             'Taken',
-            // Reliable for Hive logging: opens app UI so normal isolate is used.
             showsUserInterface: true,
             cancelNotification: true,
           ),
@@ -300,7 +261,6 @@ class NotificationService {
     final scheduled = DateTime.tryParse(scheduledIso);
     if (scheduled == null) return;
 
-    // Make sure box exists (Hive should already be initialized in your app).
     final intakeBox = Hive.box(_intakeBoxName);
 
     final key = '$reminderId::${scheduled.toIso8601String()}';
@@ -314,13 +274,11 @@ class NotificationService {
         'status': 'taken',
       });
 
-      // Cancel escalation for THIS dose only
       if (escalationId != null) {
         await _plugin.cancel(escalationId);
       }
 
-      // Optional: feedback
-      await showInstantNotification(
+      await _showInstantNotification(
         title: 'Recorded',
         body: '$reminderName marked as taken.',
       );
@@ -328,7 +286,6 @@ class NotificationService {
     }
 
     if (action == _actionSnooze10) {
-      // Snooze escalation only (push it 10 minutes from now)
       if (escalationId == null) return;
 
       await _plugin.cancel(escalationId);
@@ -347,14 +304,36 @@ class NotificationService {
     }
   }
 
+    Future<void> _showInstantNotification({
+    required String title,
+    required String body,
+  }) async {
+    if (!_initialized) await init();
+
+    final int id = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+
+    await _plugin.show(
+      id,
+      title,
+      body,
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'instant',
+          'Instant Alerts',
+          importance: Importance.max,
+          priority: Priority.high,
+        ),
+        iOS: DarwinNotificationDetails(),
+      ),
+    );
+  }
+
+
   int _idForDay(int baseId, tz.TZDateTime day, {required _Kind kind}) {
-    // dayKey = yyyymmdd
     final dayKey = (day.year * 10000) + (day.month * 100) + day.day;
 
-    // Deterministic 31-bit id
     int id = (baseId ^ dayKey) & 0x7fffffff;
 
-    // Separate primary vs escalation
     if (kind == _Kind.escalation) {
       id = (id ^ 0x40000000) & 0x7fffffff;
     }

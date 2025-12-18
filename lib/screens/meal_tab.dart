@@ -153,7 +153,7 @@ class _MealTabState extends State<MealTab> {
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<MealType>(
-                      value: type,
+                      initialValue: type,
                       items: MealType.values
                           .map((t) => DropdownMenuItem(
                                 value: t,

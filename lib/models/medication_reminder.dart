@@ -1,56 +1,58 @@
 import 'package:flutter/material.dart';
 
-// Represents a single medication, which can have multiple reminder times.
 class MedicationReminder {
-  String id;
-  String name;
-  int pillsPerDose;
-  List<TimeOfDay> times; // A medication can have multiple reminder times
-  bool isEnabled;
+  final String id;
+  final String name;
+  final int pillsPerDose;
+  final List<TimeOfDay> times;
+  final bool isEnabled;
 
-  MedicationReminder({
+  const MedicationReminder({
     required this.id,
     required this.name,
     required this.pillsPerDose,
     required this.times,
-    this.isEnabled = true,
+    required this.isEnabled,
   });
 
-  // Methods to convert to and from a map for local storage (Hive)
-  Map<String, dynamic> toMap() => {
-        'id': id,
-        'name': name,
-        'pillsPerDose': pillsPerDose,
-        'isEnabled': isEnabled,
-        // Store times as a list of strings for persistence
-        'times': times.map((t) => '${t.hour}:${t.minute}').toList(),
-      };
-
-  factory MedicationReminder.fromMap(Map<String, dynamic> map) {
-    return MedicationReminder(
-      id: map['id'] ?? '',
-      name: map['name'] ?? '',
-      pillsPerDose: map['pillsPerDose'] ?? 1,
-      isEnabled: map['isEnabled'] ?? true,
-      times: (map['times'] as List<dynamic>? ?? []).map((timeStr) {
-        final parts = (timeStr as String).split(':');
-        return TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
-      }).toList(),
-    );
-  }
-
   MedicationReminder copyWith({
+    String? id,
     String? name,
     int? pillsPerDose,
     List<TimeOfDay>? times,
     bool? isEnabled,
   }) {
     return MedicationReminder(
-      id: id,
+      id: id ?? this.id,
       name: name ?? this.name,
       pillsPerDose: pillsPerDose ?? this.pillsPerDose,
       times: times ?? this.times,
       isEnabled: isEnabled ?? this.isEnabled,
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'name': name,
+        'pillsPerDose': pillsPerDose,
+        'times': times.map((t) => '${t.hour}:${t.minute}').toList(),
+        'isEnabled': isEnabled,
+      };
+
+  factory MedicationReminder.fromMap(Map<String, dynamic> map) {
+    final timeParts = (map['times'] as List)
+        .map((t) => t.toString().split(':'))
+        .where((p) => p.length == 2)
+        .toList();
+
+    return MedicationReminder(
+      id: map['id'] as String,
+      name: map['name'] as String,
+      pillsPerDose: (map['pillsPerDose'] as num?)?.toInt() ?? 1,
+      times: timeParts
+          .map((p) => TimeOfDay(hour: int.parse(p[0]), minute: int.parse(p[1])))
+          .toList(),
+      isEnabled: map['isEnabled'] as bool? ?? true,
     );
   }
 }

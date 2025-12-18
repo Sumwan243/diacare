@@ -1,30 +1,42 @@
 import 'package:flutter/material.dart';
 
 class AppTheme {
-  static final Color _seedColor = Colors.redAccent;
+  static ThemeData lightTheme(ColorScheme? dynamicScheme) {
+    final scheme = dynamicScheme ??
+        ColorScheme.fromSeed(
+          seedColor: Colors.teal,
+          brightness: Brightness.light,
+        );
 
-  static ThemeData get lightTheme {
-    final colorScheme = ColorScheme.fromSeed(
-      seedColor: _seedColor,
-      brightness: Brightness.light,
-    );
-    return ThemeData.from(colorScheme: colorScheme).copyWith(
-      cardTheme: CardThemeData( // Corrected from CardTheme
-        elevation: 2,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    return ThemeData(
+      useMaterial3: true,
+      colorScheme: scheme,
+      scaffoldBackgroundColor: scheme.surface,
+      appBarTheme: AppBarTheme(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        foregroundColor: scheme.onSurface,
+        surfaceTintColor: Colors.transparent,
       ),
     );
   }
 
-  static ThemeData get darkTheme {
-    final colorScheme = ColorScheme.fromSeed(
-      seedColor: _seedColor,
-      brightness: Brightness.dark,
-    );
-    return ThemeData.from(colorScheme: colorScheme).copyWith(
-      cardTheme: CardThemeData( // Corrected from CardTheme
-        elevation: 2,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+  static ThemeData darkTheme(ColorScheme? dynamicScheme) {
+    final scheme = dynamicScheme ??
+        ColorScheme.fromSeed(
+          seedColor: Colors.teal,
+          brightness: Brightness.dark,
+        );
+
+    return ThemeData(
+      useMaterial3: true,
+      colorScheme: scheme,
+      scaffoldBackgroundColor: scheme.surface,
+      appBarTheme: AppBarTheme(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        foregroundColor: scheme.onSurface,
+        surfaceTintColor: Colors.transparent,
       ),
     );
   }

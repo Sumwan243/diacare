@@ -20,6 +20,7 @@ dependencies:
   intl: ^0.18.1
   collection: ^1.17.0
   crypto: ^3.0.3
+  dynamic_color: ^1.6.9 # Restored the missing dependency
 
 dev_dependencies:
   flutter_test:

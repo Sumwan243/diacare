@@ -1,4 +1,4 @@
-import 'package:diacare/utils/notifications.dart';
+import 'package:diacare/services/notification_service.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -24,11 +24,12 @@ class AppInitializer {
       Hive.openBox('userProfile'),
       Hive.openBox('medications'),
       Hive.openBox('medication_logs_box'),
+      Hive.openBox('med_intake_log_box'), // For the new notification system
 
       // Feature boxes
       Hive.openBox('blood_sugar_box'),
       Hive.openBox('activity_box'),
-      Hive.openBox('meals_box'), // Corrected name
+      Hive.openBox('meals_box'),
 
       // Cache boxes
       Hive.openBox('ai_nutrition_cache_box'),

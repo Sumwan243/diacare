@@ -1,32 +1,74 @@
 import 'package:diacare/models/medication_reminder.dart';
-import 'package:diacare/utils/notifications.dart';
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
-import 'package:permission_handler/permission_handler.dart'; // Missing import added
 
-// Generates a unique integer ID for a notification.
-int _notificationId(String medicationId, TimeOfDay time) {
-  return '${medicationId}_${time.hour}:${time.minute}'.hashCode;
-}
+import '../services/notification_service.dart';
+import '../utils/notification_ids.dart';
 
 class MedicationProvider extends ChangeNotifier {
   final Box _box = Hive.box('medications');
+  final NotificationService _notifs = NotificationService();
 
-  // This getter is now robust and will not crash on bad data.
+  static const int _daysAhead = 7;
+
   List<MedicationReminder> get reminders {
     final List<MedicationReminder> validReminders = [];
     for (final key in _box.keys) {
       try {
         final value = _box.get(key);
         if (value != null && value is Map) {
-          validReminders.add(MedicationReminder.fromMap(Map<String, dynamic>.from(value)));
+          validReminders.add(
+            MedicationReminder.fromMap(Map<String, dynamic>.from(value)),
+          );
         }
       } catch (e) {
-        // If an entry is malformed, print an error and safely skip it.
-        debugPrint('Could not parse reminder with key $key. It may be from an old version. Error: $e');
+        debugPrint(
+          'Could not parse reminder with key $key. Old version? Error: $e',
+        );
       }
     }
-    return validReminders;
+    // BUGFIX: Always sort the list for a consistent UI.
+    return validReminders..sort((a, b) => a.name.compareTo(b.name));
+  }
+
+  List<TimeOfDay> _dedupAndSortTimes(List<TimeOfDay> times) {
+    final unique = <String, TimeOfDay>{};
+
+    for (final t in times) {
+      final k = '${t.hour}:${t.minute}';
+      unique[k] = t;
+    }
+
+    final list = unique.values.toList()
+      ..sort((a, b) {
+        final am = a.hour * 60 + a.minute;
+        final bm = b.hour * 60 + b.minute;
+        return am.compareTo(bm);
+      });
+
+    return list;
+  }
+
+  Future<void> _scheduleIfEnabled(MedicationReminder r) async {
+    if (!r.isEnabled) return;
+
+    for (final t in r.times) {
+      final baseId = baseIdForReminderTime(r.id, t);
+      await _notifs.scheduleDailySeries(
+        reminder: r,
+        time: t,
+        baseId: baseId,
+        daysAhead: _daysAhead,
+        escalationDelay: const Duration(minutes: 10),
+      );
+    }
+  }
+
+  Future<void> _cancelAllForReminder(MedicationReminder r) async {
+    for (final t in r.times) {
+      final baseId = baseIdForReminderTime(r.id, t);
+      await _notifs.cancelDailySeries(baseId: baseId, daysAhead: _daysAhead);
+    }
   }
 
   Future<void> addMedication({
@@ -36,53 +78,79 @@ class MedicationProvider extends ChangeNotifier {
     required bool isEnabled,
   }) async {
     final id = DateTime.now().millisecondsSinceEpoch.toString();
-    final medication = MedicationReminder(id: id, name: name, pillsPerDose: pills, times: times, isEnabled: isEnabled);
 
-    if (isEnabled) {
-      if (await Permission.scheduleExactAlarm.request().isGranted) {
-        for (final time in times) {
-          await NotificationService().scheduleDaily(medication, time, _notificationId(id, time));
-        }
-      }
-    }
+    final medication = MedicationReminder(
+      id: id,
+      name: name,
+      pillsPerDose: pills,
+      times: _dedupAndSortTimes(times),
+      isEnabled: isEnabled,
+    );
 
     await _box.put(id, medication.toMap());
+    await _scheduleIfEnabled(medication);
+
     notifyListeners();
   }
 
   Future<void> updateMedication(MedicationReminder updatedMedication) async {
-    final oldReminderMap = _box.get(updatedMedication.id) as Map?;
-    if (oldReminderMap == null) return;
-    final oldReminder = MedicationReminder.fromMap(Map<String, dynamic>.from(oldReminderMap));
-
-    for (final time in oldReminder.times) {
-      await NotificationService().cancelById(_notificationId(oldReminder.id, time));
-    }
-
-    if (updatedMedication.isEnabled) {
-      if (await Permission.scheduleExactAlarm.request().isGranted) {
-        for (final time in updatedMedication.times) {
-          await NotificationService().scheduleDaily(updatedMedication, time, _notificationId(updatedMedication.id, time));
-        }
+    // Load the old reminder so we can cancel old schedules (especially if times changed)
+    final oldRaw = _box.get(updatedMedication.id);
+    MedicationReminder? oldReminder;
+    if (oldRaw is Map) {
+      try {
+        oldReminder = MedicationReminder.fromMap(Map<String, dynamic>.from(oldRaw));
+      } catch (_) {
+        oldReminder = null;
       }
     }
 
-    await _box.put(updatedMedication.id, updatedMedication.toMap());
+    final normalized = updatedMedication.copyWith(
+      times: _dedupAndSortTimes(updatedMedication.times),
+    );
+
+    // Cancel old schedules first
+    if (oldReminder != null) {
+      await _cancelAllForReminder(oldReminder);
+    }
+
+    // Save new
+    await _box.put(normalized.id, normalized.toMap());
+
+    // Schedule new if enabled
+    await _scheduleIfEnabled(normalized);
+
     notifyListeners();
   }
 
   Future<void> toggleMedicationStatus(String medicationId) async {
-    final reminder = reminders.firstWhere((r) => r.id == medicationId);
-    final updatedReminder = reminder.copyWith(isEnabled: !reminder.isEnabled);
-    await updateMedication(updatedReminder);
+    // BUGFIX: Safely find the reminder to prevent crashes.
+    final reminder = reminders.firstWhere((r) => r.id == medicationId, orElse: () => throw Exception('Reminder not found'));
+
+    final updated = reminder.copyWith(isEnabled: !reminder.isEnabled);
+
+    if (reminder.isEnabled) {
+      // turning OFF
+      await _cancelAllForReminder(reminder);
+    }
+
+    await _box.put(updated.id, updated.toMap());
+
+    if (updated.isEnabled) {
+      // turning ON
+      await _scheduleIfEnabled(updated);
+    }
+
+    notifyListeners();
   }
 
   Future<void> deleteReminder(String medicationId) async {
-    final reminder = reminders.firstWhere((r) => r.id == medicationId);
-    for (final time in reminder.times) {
-      await NotificationService().cancelById(_notificationId(reminder.id, time));
-    }
+    // BUGFIX: Safely find the reminder to prevent crashes.
+    final reminder = reminders.firstWhere((r) => r.id == medicationId, orElse: () => throw Exception('Reminder not found'));
+
+    await _cancelAllForReminder(reminder);
     await _box.delete(medicationId);
+
     notifyListeners();
   }
 }

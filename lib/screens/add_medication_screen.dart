@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../models/medication_reminder.dart';
 import '../providers/medication_provider.dart';
 
@@ -14,8 +15,10 @@ class AddMedicationScreen extends StatefulWidget {
 
 class _AddMedicationScreenState extends State<AddMedicationScreen> {
   final _formKey = GlobalKey<FormState>();
-  late TextEditingController _nameController;
-  late TextEditingController _pillsController;
+
+  late final TextEditingController _nameController;
+  late final TextEditingController _pillsController;
+
   List<TimeOfDay> _selectedTimes = [];
   bool _isEnabled = true;
 
@@ -26,9 +29,10 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
     super.initState();
     _nameController = TextEditingController(text: widget.reminder?.name ?? '');
     _pillsController = TextEditingController(
-      text: widget.reminder?.pillsPerDose.toString() ?? '1',
+      text: (widget.reminder?.pillsPerDose ?? 1).toString(),
     );
     _selectedTimes = widget.reminder?.times.toList() ?? [];
+    _selectedTimes.sort(_compareTimes);
     _isEnabled = widget.reminder?.isEnabled ?? true;
   }
 
@@ -39,29 +43,39 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
     super.dispose();
   }
 
-  Future<void> _pickTime() async {
-    final TimeOfDay? picked = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.now(),
-    );
-    if (picked != null) {
-      setState(() {
-        _selectedTimes.add(picked);
-      });
-    }
+  int _compareTimes(TimeOfDay a, TimeOfDay b) {
+    final ah = a.hour, am = a.minute;
+    final bh = b.hour, bm = b.minute;
+    if (ah != bh) return ah.compareTo(bh);
+    return am.compareTo(bm);
   }
 
-  void _removeTime(int index) {
+  bool _timeEquals(TimeOfDay a, TimeOfDay b) =>
+      a.hour == b.hour && a.minute == b.minute;
+
+  Future<void> _pickTime() async {
+    final initial = _selectedTimes.isNotEmpty ? _selectedTimes.last : TimeOfDay.now();
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: initial,
+    );
+
+    if (picked == null) return;
+
     setState(() {
-      _selectedTimes.removeAt(index);
+      // avoid duplicates
+      if (_selectedTimes.any((t) => _timeEquals(t, picked))) return;
+      _selectedTimes.add(picked);
+      _selectedTimes.sort(_compareTimes);
     });
   }
 
+  void _removeTime(int index) {
+    setState(() => _selectedTimes.removeAt(index));
+  }
+
   Future<void> _saveReminder() async {
-    if (!_formKey.currentState!.validate()) {
-      debugPrint('Form validation failed');
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
 
     if (_selectedTimes.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -73,19 +87,16 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
     try {
       final provider = context.read<MedicationProvider>();
       final name = _nameController.text.trim();
-      final pills = int.tryParse(_pillsController.text) ?? 1;
-
-      debugPrint('Saving medication: $name, pills: $pills, times: $_selectedTimes');
+      final pills = int.tryParse(_pillsController.text.trim()) ?? 1;
 
       if (_isEditing) {
-        final updatedReminder = widget.reminder!.copyWith(
+        final updated = widget.reminder!.copyWith(
           name: name,
           pillsPerDose: pills,
           times: _selectedTimes,
           isEnabled: _isEnabled,
         );
-        await provider.updateMedication(updatedReminder);
-        debugPrint('Medication updated successfully');
+        await provider.updateMedication(updated);
       } else {
         await provider.addMedication(
           name: name,
@@ -93,38 +104,35 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
           times: _selectedTimes,
           isEnabled: _isEnabled,
         );
-        debugPrint('Medication added successfully');
       }
 
-      if (mounted) {
-        Navigator.pop(context);
-      }
-    } catch (e, stackTrace) {
-      debugPrint('Error saving medication: $e');
-      debugPrint('Stack trace: $stackTrace');
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error saving: $e')),
-        );
-      }
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error saving: $e')),
+      );
     }
   }
 
   Future<void> _deleteReminder() async {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogCtx) => AlertDialog(
         title: const Text('Delete Reminder'),
         content: const Text('Are you sure you want to delete this medication reminder?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () => Navigator.pop(dialogCtx, false),
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            style: TextButton.styleFrom(foregroundColor: cs.error),
+            child: const Text('Delete'),
           ),
         ],
       ),
@@ -132,37 +140,29 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
 
     if (confirm == true) {
       await context.read<MedicationProvider>().deleteReminder(widget.reminder!.id);
-      if (mounted) {
-        Navigator.pop(context);
-      }
+      if (mounted) Navigator.pop(context);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final textTheme = theme.textTheme;
+
+    final titleText = _isEditing ? 'Edit Medication' : 'Add Medication';
+
     return Scaffold(
-      backgroundColor: const Color(0xFFFAF5F8),
+      // Let Material 3 theme control surfaces.
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          _isEditing ? 'Edit Medication' : 'Add Medication',
-          style: const TextStyle(
-            color: Colors.black,
-            fontWeight: FontWeight.bold,
-            fontSize: 20,
-          ),
-        ),
+        title: Text(titleText),
         centerTitle: true,
         actions: [
           if (_isEditing)
             IconButton(
+              tooltip: 'Delete',
               onPressed: _deleteReminder,
-              icon: const Icon(Icons.delete_outline, color: Colors.red),
+              icon: Icon(Icons.delete_outline, color: cs.error),
             ),
         ],
       ),
@@ -173,21 +173,20 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Medication Name
+              Text('Details', style: textTheme.titleMedium),
+              const SizedBox(height: 12),
+
+              // Medication name
               Card(
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: TextFormField(
                     controller: _nameController,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Medication Name',
                       hintText: 'e.g., Metformin',
-                      prefixIcon: Icon(Icons.medication, color: Colors.redAccent),
-                      border: InputBorder.none,
+                      prefixIcon: Icon(Icons.medication_outlined, color: cs.primary),
+                      border: const OutlineInputBorder(),
                     ),
                     validator: (value) {
                       if (value == null || value.trim().isEmpty) {
@@ -198,30 +197,26 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
 
-              // Pills Per Dose
+              // Pills per dose
               Card(
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: TextFormField(
                     controller: _pillsController,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Pills Per Dose',
                       hintText: 'e.g., 1',
-                      prefixIcon: Icon(Icons.format_list_numbered, color: Colors.redAccent),
-                      border: InputBorder.none,
+                      prefixIcon: Icon(Icons.format_list_numbered, color: cs.primary),
+                      border: const OutlineInputBorder(),
                     ),
                     validator: (value) {
-                      if (value == null || value.isEmpty) {
+                      if (value == null || value.trim().isEmpty) {
                         return 'Please enter number of pills';
                       }
-                      final pills = int.tryParse(value);
+                      final pills = int.tryParse(value.trim());
                       if (pills == null || pills < 1) {
                         return 'Please enter a valid number';
                       }
@@ -230,136 +225,79 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
 
-              // Enable/Disable Toggle
+              // Enable/disable
               Card(
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: SwitchListTile(
-                  title: const Text('Enable Reminders'),
-                  subtitle: Text(
-                    _isEnabled ? 'Notifications are on' : 'Notifications are off',
-                  ),
+                child: SwitchListTile.adaptive(
+                  title: const Text('Enable reminders'),
+                  subtitle: Text(_isEnabled ? 'Notifications are on' : 'Notifications are off'),
                   value: _isEnabled,
-                  onChanged: (value) {
-                    setState(() {
-                      _isEnabled = value;
-                    });
-                  },
-                  activeThumbColor: Colors.redAccent,
+                  onChanged: (v) => setState(() => _isEnabled = v),
                   secondary: Icon(
                     _isEnabled ? Icons.notifications_active : Icons.notifications_off,
-                    color: _isEnabled ? Colors.redAccent : Colors.grey,
+                    color: _isEnabled ? cs.primary : cs.outline,
                   ),
                 ),
               ),
+
               const SizedBox(height: 24),
-
-              // Reminder Times Section
-              const Text(
-                'Reminder Times',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+              Text('Reminder Times', style: textTheme.titleMedium),
               const SizedBox(height: 12),
 
-              // Add Time Button
-              Card(
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: InkWell(
-                  onTap: _pickTime,
-                  borderRadius: BorderRadius.circular(12),
-                  child: const Padding(
-                    padding: EdgeInsets.all(16.0),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.add_alarm, color: Colors.redAccent),
-                        SizedBox(width: 12),
-                        Text(
-                          'Add Reminder Time',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+              // Add time (tonal button to match M3)
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.tonalIcon(
+                  onPressed: _pickTime,
+                  icon: const Icon(Icons.add_alarm),
+                  label: const Text('Add reminder time'),
                 ),
               ),
+
               const SizedBox(height: 12),
 
-              // List of Selected Times
               if (_selectedTimes.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 16.0),
-                  child: Center(
-                    child: Text(
-                      'No reminder times added yet',
-                      style: TextStyle(color: Colors.grey),
-                    ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12.0),
+                  child: Text(
+                    'No reminder times added yet',
+                    style: textTheme.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+                    textAlign: TextAlign.center,
                   ),
                 )
               else
                 ...List.generate(_selectedTimes.length, (index) {
                   final time = _selectedTimes[index];
                   return Card(
-                    elevation: 1,
-                    margin: const EdgeInsets.symmetric(vertical: 4),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
                     child: ListTile(
-                      leading: const Icon(Icons.access_time, color: Colors.redAccent),
+                      leading: Icon(Icons.access_time, color: cs.primary),
                       title: Text(
                         time.format(context),
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                        ),
+                        style: textTheme.titleMedium,
                       ),
                       trailing: IconButton(
-                        icon: const Icon(Icons.close, color: Colors.grey),
+                        tooltip: 'Remove',
+                        icon: Icon(Icons.close, color: cs.outline),
                         onPressed: () => _removeTime(index),
                       ),
                     ),
                   );
                 }),
 
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
 
-              // Save Button
+              // Save button (primary filled)
               SizedBox(
                 width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
+                child: FilledButton(
                   onPressed: _saveReminder,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.redAccent,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(52),
                   ),
-                  child: Text(
-                    _isEditing ? 'Update Medication' : 'Save Medication',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  child: Text(_isEditing ? 'Update Medication' : 'Save Medication'),
                 ),
               ),
-              const SizedBox(height: 16),
             ],
           ),
         ),
