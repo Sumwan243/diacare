@@ -1,4 +1,4 @@
-import 'nutrition_summary.dart';
+import 'package:diacare/models/nutrition_summary.dart';
 
 enum MealType { breakfast, lunch, dinner, snack }
 
@@ -9,11 +9,8 @@ class Meal {
   final MealType mealType;
   final DateTime timestamp;
 
-  /// AI estimate per 100g. Null until the estimate arrives.
-  final NutritionSummary? estimatedPer100g;
-
-  /// If AI failed, store the error so UI can show subtle fallback.
-  final String? estimateError;
+  // This now directly stores the final, total nutritional info.
+  final NutritionSummary totalNutrients;
 
   const Meal({
     required this.id,
@@ -21,35 +18,24 @@ class Meal {
     required this.grams,
     required this.mealType,
     required this.timestamp,
-    required this.estimatedPer100g,
-    required this.estimateError,
+    required this.totalNutrients,
   });
 
-  bool get isEstimating => estimatedPer100g == null && estimateError == null;
-  bool get hasEstimate => estimatedPer100g != null;
-
-  NutritionSummary get totalNutrients {
-    final per100 = estimatedPer100g;
-    if (per100 == null) return NutritionSummary.zero;
-    return per100.scale(grams / 100.0);
-  }
-
   Meal copyWith({
+    String? id,
     String? name,
     double? grams,
     MealType? mealType,
     DateTime? timestamp,
-    NutritionSummary? estimatedPer100g,
-    String? estimateError,
+    NutritionSummary? totalNutrients,
   }) {
     return Meal(
-      id: id,
+      id: id ?? this.id,
       name: name ?? this.name,
       grams: grams ?? this.grams,
       mealType: mealType ?? this.mealType,
       timestamp: timestamp ?? this.timestamp,
-      estimatedPer100g: estimatedPer100g ?? this.estimatedPer100g,
-      estimateError: estimateError ?? this.estimateError,
+      totalNutrients: totalNutrients ?? this.totalNutrients,
     );
   }
 
@@ -59,21 +45,19 @@ class Meal {
         'grams': grams,
         'mealType': mealType.name,
         'timestamp': timestamp.toIso8601String(),
-        'estimatedPer100g': estimatedPer100g?.toMap(),
-        'estimateError': estimateError,
+        'totalNutrients': totalNutrients.toMap(),
       };
 
-  factory Meal.fromMap(Map<String, dynamic> map) => Meal(
-        id: map['id'] as String,
-        name: map['name'] as String,
-        grams: (map['grams'] as num).toDouble(),
-        mealType: MealType.values.firstWhere((e) => e.name == map['mealType']),
-        timestamp: DateTime.parse(map['timestamp'] as String),
-        estimatedPer100g: map['estimatedPer100g'] == null
-            ? null
-            : NutritionSummary.fromMap(
-                Map<String, dynamic>.from(map['estimatedPer100g'] as Map),
-              ),
-        estimateError: map['estimateError'] as String?,
-      );
+  factory Meal.fromMap(Map<String, dynamic> map) {
+    return Meal(
+      id: map['id'] as String,
+      name: map['name'] as String,
+      grams: (map['grams'] as num).toDouble(),
+      mealType: MealType.values.firstWhere((e) => e.name == map['mealType'], orElse: () => MealType.snack),
+      timestamp: DateTime.parse(map['timestamp'] as String),
+      totalNutrients: NutritionSummary.fromMap(
+        Map<String, dynamic>.from(map['totalNutrients'] ?? {})
+      ),
+    );
+  }
 }

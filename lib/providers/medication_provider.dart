@@ -153,4 +153,20 @@ class MedicationProvider extends ChangeNotifier {
 
     notifyListeners();
   }
+
+  /// Reschedules all enabled medication reminders.
+  /// This should be called on app start and when app resumes to ensure
+  /// notifications are always scheduled for the next 7 days.
+  Future<void> rescheduleAllReminders() async {
+    try {
+      for (final reminder in reminders) {
+        if (reminder.isEnabled) {
+          await _scheduleIfEnabled(reminder);
+        }
+      }
+      debugPrint('Rescheduled all enabled medication reminders');
+    } catch (e) {
+      debugPrint('Error rescheduling reminders: $e');
+    }
+  }
 }

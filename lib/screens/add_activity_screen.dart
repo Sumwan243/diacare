@@ -48,7 +48,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> {
                 final duration = int.tryParse(_durationController.text);
                 final calories = int.tryParse(_caloriesController.text) ?? 0;
 
-                if (duration == null) return; // Add validation feedback
+                if (duration == null) return; 
 
                 context.read<ActivityProvider>().addActivity(
                       _selectedType,

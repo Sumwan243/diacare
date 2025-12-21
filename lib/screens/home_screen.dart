@@ -1,8 +1,12 @@
 import 'package:diacare/providers/activity_provider.dart';
 import 'package:diacare/providers/blood_sugar_provider.dart';
+import 'package:diacare/providers/meal_provider.dart';
+import 'package:diacare/providers/recommendation_provider.dart';
 import 'package:diacare/providers/user_profile_provider.dart';
+import 'package:diacare/providers/blood_pressure_provider.dart';
 import 'package:diacare/screens/activity_history_screen.dart';
 import 'package:diacare/screens/blood_sugar_history_screen.dart';
+import 'package:diacare/screens/blood_pressure_history_screen.dart';
 import 'package:diacare/screens/meal_tab.dart';
 import 'package:diacare/screens/profile_screen.dart';
 import 'package:diacare/screens/reminders_screen.dart';
@@ -29,6 +33,8 @@ class HomeScreen extends StatelessWidget {
 
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final bpProv = context.watch<BloodPressureProvider>();
+    final latestBP = bpProv.getLatestEntry();
 
     return Scaffold(
       appBar: AppBar(
@@ -72,7 +78,7 @@ class HomeScreen extends StatelessWidget {
                       height: _kTallCardHeight,
                       child: _DashboardCard(
                         title: 'Meals',
-                        subtitle: 'Log today’s intake',
+                        subtitle: 'Log todays intake',
                         icon: Icons.soup_kitchen,
                         color: cs.tertiary,
                         verticalLayout: true,
@@ -90,7 +96,7 @@ class HomeScreen extends StatelessWidget {
                         SizedBox(
                           height: _kSmallCardHeight,
                           child: _DashboardCard(
-                            title: 'Blood Tracker',
+                            title: 'Glucose Tracker',
                             subtitle: latest != null
                                 ? '${latest.level} mg/dL'
                                 : 'No readings',
@@ -128,21 +134,47 @@ class HomeScreen extends StatelessWidget {
 
               const SizedBox(height: 16),
 
-              SizedBox(
-                height: 112,
-                child: _DashboardCard(
-                  title: 'Personal Assistant',
-                  subtitle: 'Ask about meals, symptoms, exercise',
-                  icon: Icons.auto_awesome,
-                  color: cs.primary,
-                  wide: true,
-                  isAi: true,
-                  onTap: () {},
-                ),
+              // Hydration and Blood Pressure tracker cards side-by-side
+              Row(
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: 160,
+                      child: _DashboardCard(
+                        title: 'Hydration',
+                        subtitle: 'its important to keep hydrating',
+                        icon: Icons.local_drink,
+                        color: cs.tertiary,
+                        onTap: () {},
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: SizedBox(
+                      height: 160,
+                      child: _DashboardCard(
+                        title: 'Blood Pressure',
+                        subtitle: latestBP != null ? '${latestBP.systolic}/${latestBP.diastolic} mmHg' : 'No readings',
+                        icon: Icons.favorite,
+                        color: cs.secondary,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const BloodPressureHistoryScreen()),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
 
               const SizedBox(height: 16),
-              const _WeeklyProgressCard(),
+
+              // Personal AI assistant card below the trackers
+              SizedBox(
+                height: 112,
+                child: _AICard(),
+              ),
             ],
           ),
         ),
@@ -340,7 +372,7 @@ class _DashboardCard extends StatelessWidget {
           title,
           style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
           textAlign: TextAlign.center,
-          maxLines: 1,
+          maxLines: 2,
           overflow: TextOverflow.ellipsis,
         ),
         const SizedBox(height: 4),
@@ -372,7 +404,7 @@ class _DashboardCard extends StatelessWidget {
                 title,
                 style: (wide ? theme.textTheme.titleLarge : theme.textTheme.titleMedium)
                     ?.copyWith(fontWeight: FontWeight.bold),
-                maxLines: 1,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 4),
@@ -400,3 +432,84 @@ class _DashboardCard extends StatelessWidget {
     );
   }
 }
+
+class _AICard extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final recommendationProv = context.watch<RecommendationProvider>();
+    final bloodSugarProv = context.watch<BloodSugarProvider>();
+    final mealProv = context.watch<MealProvider>();
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    return _SurfaceCard(
+      onTap: () {
+        // Fetch recommendation when tapped
+        final glucose = bloodSugarProv.entries
+            .take(5)
+            .map((e) => {'level': e.level, 'context': e.context, 'timestamp': e.timestamp.toIso8601String()})
+            .toList();
+        final meals = mealProv.meals
+            .take(5)
+            .map((m) => {'name': m.name, 'calories': m.totalNutrients.caloriesKcal, 'carbs': m.totalNutrients.carbsG})
+            .toList();
+        
+        recommendationProv.fetchRecommendation(glucose: glucose, meals: meals);
+      },
+      extraSide: BorderSide(color: cs.primary.withOpacity(0.55), width: 1.2),
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        'Personal Assistant',
+                        style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      if (recommendationProv.isLoading) ...[
+                        const SizedBox(width: 8),
+                        SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    recommendationProv.recommendation,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: cs.secondaryContainer,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.auto_awesome, color: cs.primary, size: 24),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+

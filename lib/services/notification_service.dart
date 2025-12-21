@@ -1,10 +1,12 @@
 import 'dart:convert';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' show debugPrint, TimeOfDay;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:hive/hive.dart';
+import 'package:intl/intl.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
+import 'package:uuid/uuid.dart';
 
 import '../models/medication_reminder.dart';
 
@@ -267,12 +269,33 @@ class NotificationService {
     final action = response.actionId;
 
     if (action == _actionTaken) {
+      // Write to med_intake_log_box (notification storage)
       await intakeBox.put(key, {
         'reminderId': reminderId,
         'scheduled': scheduled.toIso8601String(),
         'takenAt': DateTime.now().toIso8601String(),
         'status': 'taken',
       });
+
+      // Also write to medication_logs_box in the format MedicationLogProvider expects
+      // This ensures the UI can find it when checking isDoseTaken
+      try {
+        final logBox = Hive.box('medication_logs_box');
+        final scheduledTime = TimeOfDay.fromDateTime(scheduled);
+        final dateString = DateFormat('yyyy-MM-dd').format(scheduled);
+        final logKey = '${reminderId}_${dateString}_${scheduledTime.hour}:${scheduledTime.minute}';
+        
+        final log = {
+          'id': const Uuid().v4(),
+          'medicationId': reminderId,
+          'time': DateTime.now().toIso8601String(),
+          'taken': true,
+        };
+        await logBox.put(logKey, log);
+      } catch (e) {
+        debugPrint('Error syncing to medication_logs_box: $e');
+        // Continue even if this fails - the notification box is the source of truth
+      }
 
       if (escalationId != null) {
         await _plugin.cancel(escalationId);

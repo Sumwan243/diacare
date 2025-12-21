@@ -1,26 +1,48 @@
 import 'dart:collection';
 
+import 'package:diacare/models/meal.dart';
+import 'package:diacare/models/nutrition_summary.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart' show DateUtils;
+import 'package:flutter/material.dart' show DateUtils, TimeOfDay;
 import 'package:hive/hive.dart';
 import 'package:uuid/uuid.dart';
 
-import '../models/meal.dart';
-import '../models/nutrition_summary.dart';
-import '../services/openai_meal_estimator.dart';
+// Ensure this class matches what your UI expects
+class NutritionInfo {
+  final double caloriesKcal;
+  final double carbsG;
+  final double proteinG;
+  final double fatG;
+
+  const NutritionInfo({
+    this.caloriesKcal = 0,
+    this.carbsG = 0,
+    this.proteinG = 0,
+    this.fatG = 0,
+  });
+}
 
 class MealProvider extends ChangeNotifier {
   final Box _box = Hive.box('meals_box');
-  final OpenAiMealEstimator _ai = OpenAiMealEstimator();
 
   List<Meal> get meals {
-    return _box.values
-        .map((e) => Meal.fromMap(Map<String, dynamic>.from(e as Map)))
-        .toList()
-      ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+    final List<Meal> validMeals = [];
+    for (final value in _box.values) {
+      try {
+        if (value != null && value is Map) {
+          validMeals.add(
+            Meal.fromMap(Map<String, dynamic>.from(value)),
+          );
+        }
+      } catch (e) {
+        debugPrint('Error parsing meal: $e');
+        // Skip corrupted entries
+      }
+    }
+    validMeals.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+    return validMeals;
   }
 
-  /// Map of day -> list of meals on that day (newest days first).
   Map<DateTime, List<Meal>> get mealsByDay {
     final Map<DateTime, List<Meal>> grouped = {};
     for (final m in meals) {
@@ -37,7 +59,7 @@ class MealProvider extends ChangeNotifier {
     return result;
   }
 
-  NutritionSummary getNutritionForDay(DateTime date) {
+  NutritionInfo getNutritionForDay(DateTime date) {
     final day = DateUtils.dateOnly(date);
     NutritionSummary total = NutritionSummary.zero;
     for (final m in meals) {
@@ -45,31 +67,48 @@ class MealProvider extends ChangeNotifier {
         total = total + m.totalNutrients;
       }
     }
-    return total;
+    return NutritionInfo(
+      caloriesKcal: total.caloriesKcal,
+      carbsG: total.carbsG,
+      proteinG: total.proteinG,
+      fatG: total.fatG,
+    );
   }
 
+  // Users manually enter calories and carbs - no AI estimation
   Future<void> addMeal({
     required String name,
     required double grams,
     required MealType mealType,
     DateTime? timestamp,
+    double calories = 0,
+    double carbs = 0,
+    double protein = 0,
+    double fat = 0,
+    NutritionSummary? nutrition,
   }) async {
     final id = const Uuid().v4();
+
+    // Use user-provided values directly
+    final totalNutrients = nutrition ?? NutritionSummary(
+      caloriesKcal: calories,
+      carbsG: carbs,
+      proteinG: protein,
+      fatG: fat,
+      fiberG: 0,
+    );
+
     final meal = Meal(
       id: id,
       name: name.trim(),
       grams: grams,
       mealType: mealType,
       timestamp: timestamp ?? DateTime.now(),
-      estimatedPer100g: null,
-      estimateError: null,
+      totalNutrients: totalNutrients,
     );
 
     await _box.put(id, meal.toMap());
     notifyListeners();
-
-    // Fire-and-forget estimate (updates the card when it arrives).
-    Future(() => _estimateAndUpdate(id));
   }
 
   Future<void> deleteMeal(String id) async {
@@ -80,35 +119,5 @@ class MealProvider extends ChangeNotifier {
   Future<void> updateMeal(Meal updated) async {
     await _box.put(updated.id, updated.toMap());
     notifyListeners();
-  }
-
-  Future<void> _estimateAndUpdate(String mealId) async {
-    final raw = _box.get(mealId);
-    if (raw == null) return;
-
-    final meal = Meal.fromMap(Map<String, dynamic>.from(raw as Map));
-
-    // Don't re-estimate if already estimated.
-    if (meal.estimatedPer100g != null) return;
-
-    try {
-      final per100g = await _ai.estimatePer100g(
-        foodName: meal.name,
-        veganBias: true,
-        cuisine: 'Ethiopian',
-      );
-
-      final updated = meal.copyWith(
-        estimatedPer100g: per100g,
-        estimateError: null,
-      );
-
-      await _box.put(mealId, updated.toMap());
-      notifyListeners();
-    } catch (e) {
-      final updated = meal.copyWith(estimateError: e.toString());
-      await _box.put(mealId, updated.toMap());
-      notifyListeners();
-    }
   }
 }

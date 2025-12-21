@@ -19,7 +19,12 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
   late final TextEditingController _nameController;
   late final TextEditingController _pillsController;
 
+  // State for Times
   List<TimeOfDay> _selectedTimes = [];
+
+  // State for Weekdays (Mon-Sun) - Default to all true
+  List<bool> _selectedWeekdays = List.generate(7, (index) => true);
+
   bool _isEnabled = true;
 
   bool get _isEditing => widget.reminder != null;
@@ -34,6 +39,9 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
     _selectedTimes = widget.reminder?.times.toList() ?? [];
     _selectedTimes.sort(_compareTimes);
     _isEnabled = widget.reminder?.isEnabled ?? true;
+
+    // TODO: If your MedicationReminder model supports days, load them here.
+    // Example: _selectedWeekdays = widget.reminder?.weekdays ?? List.generate(7, (index) => true);
   }
 
   @override
@@ -61,17 +69,25 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
     );
 
     if (picked == null) return;
+    _addTime(picked);
+  }
 
+  void _addTime(TimeOfDay time) {
     setState(() {
-      // avoid duplicates
-      if (_selectedTimes.any((t) => _timeEquals(t, picked))) return;
-      _selectedTimes.add(picked);
+      if (_selectedTimes.any((t) => _timeEquals(t, time))) return;
+      _selectedTimes.add(time);
       _selectedTimes.sort(_compareTimes);
     });
   }
 
   void _removeTime(int index) {
     setState(() => _selectedTimes.removeAt(index));
+  }
+
+  void _toggleWeekday(int index) {
+    setState(() {
+      _selectedWeekdays[index] = !_selectedWeekdays[index];
+    });
   }
 
   Future<void> _saveReminder() async {
@@ -84,10 +100,21 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
       return;
     }
 
+    // Optional: Validation to ensure at least one day is selected
+    if (!_selectedWeekdays.contains(true)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select at least one day of the week')),
+      );
+      return;
+    }
+
     try {
       final provider = context.read<MedicationProvider>();
       final name = _nameController.text.trim();
       final pills = int.tryParse(_pillsController.text.trim()) ?? 1;
+
+      // Note: You need to update your MedicationReminder model to accept 'weekdays'
+      // For now, this code assumes the existing structure but implies where to add it.
 
       if (_isEditing) {
         final updated = widget.reminder!.copyWith(
@@ -95,6 +122,7 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
           pillsPerDose: pills,
           times: _selectedTimes,
           isEnabled: _isEnabled,
+          // weekdays: _selectedWeekdays, // Add this to your model
         );
         await provider.updateMedication(updated);
       } else {
@@ -103,6 +131,7 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
           pills: pills,
           times: _selectedTimes,
           isEnabled: _isEnabled,
+          // weekdays: _selectedWeekdays, // Add this to your model
         );
       }
 
@@ -116,22 +145,17 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
   }
 
   Future<void> _deleteReminder() async {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-
+    // ... (Keep existing delete logic)
     final confirm = await showDialog<bool>(
       context: context,
       builder: (dialogCtx) => AlertDialog(
         title: const Text('Delete Reminder'),
-        content: const Text('Are you sure you want to delete this medication reminder?'),
+        content: const Text('Are you sure?'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogCtx, false),
-            child: const Text('Cancel'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(dialogCtx, false), child: const Text('Cancel')),
           TextButton(
             onPressed: () => Navigator.pop(dialogCtx, true),
-            style: TextButton.styleFrom(foregroundColor: cs.error),
+            style: TextButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error),
             child: const Text('Delete'),
           ),
         ],
@@ -139,6 +163,7 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
     );
 
     if (confirm == true) {
+      if (!mounted) return;
       await context.read<MedicationProvider>().deleteReminder(widget.reminder!.id);
       if (mounted) Navigator.pop(context);
     }
@@ -150,158 +175,248 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
     final cs = theme.colorScheme;
     final textTheme = theme.textTheme;
 
-    final titleText = _isEditing ? 'Edit Medication' : 'Add Medication';
-
     return Scaffold(
-      // Let Material 3 theme control surfaces.
+      backgroundColor: cs.surface,
       appBar: AppBar(
-        title: Text(titleText),
-        centerTitle: true,
+        title: Text(_isEditing ? 'Edit Medication' : 'New Schedule'),
+        backgroundColor: Colors.transparent,
         actions: [
           if (_isEditing)
             IconButton(
               tooltip: 'Delete',
               onPressed: _deleteReminder,
-              icon: Icon(Icons.delete_outline, color: cs.error),
+              icon: Icon(Icons.delete_rounded, color: cs.error),
             ),
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(20.0),
         child: Form(
           key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Details', style: textTheme.titleMedium),
-              const SizedBox(height: 12),
-
-              // Medication name
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: TextFormField(
-                    controller: _nameController,
-                    decoration: InputDecoration(
-                      labelText: 'Medication Name',
-                      hintText: 'e.g., Metformin',
-                      prefixIcon: Icon(Icons.medication_outlined, color: cs.primary),
-                      border: const OutlineInputBorder(),
-                    ),
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Please enter medication name';
-                      }
-                      return null;
-                    },
-                  ),
+              // 1. Basic Info Section
+              _buildSectionHeader(context, 'Medication Details'),
+              Container(
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(20),
                 ),
-              ),
-              const SizedBox(height: 12),
-
-              // Pills per dose
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: TextFormField(
-                    controller: _pillsController,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      labelText: 'Pills Per Dose',
-                      hintText: 'e.g., 1',
-                      prefixIcon: Icon(Icons.format_list_numbered, color: cs.primary),
-                      border: const OutlineInputBorder(),
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  children: [
+                    TextFormField(
+                      controller: _nameController,
+                      decoration: InputDecoration(
+                        labelText: 'Name',
+                        hintText: 'e.g., Metformin',
+                        filled: true,
+                        fillColor: cs.surface,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                        prefixIcon: Icon(Icons.medication, color: cs.primary),
+                      ),
+                      validator: (v) => v?.trim().isEmpty == true ? 'Required' : null,
                     ),
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Please enter number of pills';
-                      }
-                      final pills = int.tryParse(value.trim());
-                      if (pills == null || pills < 1) {
-                        return 'Please enter a valid number';
-                      }
-                      return null;
-                    },
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              // Enable/disable
-              Card(
-                child: SwitchListTile.adaptive(
-                  title: const Text('Enable reminders'),
-                  subtitle: Text(_isEnabled ? 'Notifications are on' : 'Notifications are off'),
-                  value: _isEnabled,
-                  onChanged: (v) => setState(() => _isEnabled = v),
-                  secondary: Icon(
-                    _isEnabled ? Icons.notifications_active : Icons.notifications_off,
-                    color: _isEnabled ? cs.primary : cs.outline,
-                  ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: _pillsController,
+                            keyboardType: TextInputType.number,
+                            decoration: InputDecoration(
+                              labelText: 'Pills/Dose',
+                              hintText: '1',
+                              filled: true,
+                              fillColor: cs.surface,
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                              prefixIcon: Icon(Icons.numbers, color: cs.primary),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Container(
+                            height: 60,
+                            decoration: BoxDecoration(
+                              color: cs.surface,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: SwitchListTile(
+                              title: const Text('Active', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                              value: _isEnabled,
+                              onChanged: (v) => setState(() => _isEnabled = v),
+                              dense: true,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
 
               const SizedBox(height: 24),
-              Text('Reminder Times', style: textTheme.titleMedium),
-              const SizedBox(height: 12),
 
-              // Add time (tonal button to match M3)
-              SizedBox(
+              // 2. Frequency / Days Section
+              _buildSectionHeader(context, 'Frequency'),
+              Container(
                 width: double.infinity,
-                child: FilledButton.tonalIcon(
-                  onPressed: _pickTime,
-                  icon: const Icon(Icons.add_alarm),
-                  label: const Text('Add reminder time'),
+                padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Column(
+                  children: [
+                    const Text('Tap to toggle specific days', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: List.generate(7, (index) {
+                        final days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+                        final isSelected = _selectedWeekdays[index];
+                        return GestureDetector(
+                          onTap: () => _toggleWeekday(index),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: isSelected ? cs.primary : cs.surface,
+                              shape: BoxShape.circle,
+                              boxShadow: isSelected
+                                  ? [BoxShadow(color: cs.primary.withOpacity(0.4), blurRadius: 6, offset: const Offset(0, 3))]
+                                  : null,
+                              border: Border.all(color: isSelected ? cs.primary : cs.outlineVariant),
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              days[index],
+                              style: TextStyle(
+                                color: isSelected ? cs.onPrimary : cs.onSurfaceVariant,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        );
+                      }),
+                    ),
+                  ],
                 ),
               ),
 
-              const SizedBox(height: 12),
-
-              if (_selectedTimes.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12.0),
-                  child: Text(
-                    'No reminder times added yet',
-                    style: textTheme.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
-                    textAlign: TextAlign.center,
-                  ),
-                )
-              else
-                ...List.generate(_selectedTimes.length, (index) {
-                  final time = _selectedTimes[index];
-                  return Card(
-                    child: ListTile(
-                      leading: Icon(Icons.access_time, color: cs.primary),
-                      title: Text(
-                        time.format(context),
-                        style: textTheme.titleMedium,
-                      ),
-                      trailing: IconButton(
-                        tooltip: 'Remove',
-                        icon: Icon(Icons.close, color: cs.outline),
-                        onPressed: () => _removeTime(index),
-                      ),
-                    ),
-                  );
-                }),
-
               const SizedBox(height: 24),
 
-              // Save button (primary filled)
+              // 3. Schedule / Times Section
+              _buildSectionHeader(context, 'Schedule'),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Quick Add Buttons
+                    const Text('Quick Add', style: TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        _buildQuickAddChip(context, 'Morning', const TimeOfDay(hour: 8, minute: 0), Icons.wb_sunny_outlined),
+                        _buildQuickAddChip(context, 'Lunch', const TimeOfDay(hour: 12, minute: 0), Icons.restaurant_menu),
+                        _buildQuickAddChip(context, 'Night', const TimeOfDay(hour: 20, minute: 0), Icons.bedtime_outlined),
+                      ],
+                    ),
+                    const Divider(height: 24),
+
+                    // Selected Times Display
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Selected Times', style: TextStyle(fontWeight: FontWeight.bold)),
+                        TextButton.icon(
+                          onPressed: _pickTime,
+                          icon: const Icon(Icons.add, size: 18),
+                          label: const Text('Custom'),
+                          style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                        )
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+
+                    if (_selectedTimes.isEmpty)
+                      Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          child: Text('No times set.', style: TextStyle(color: cs.onSurfaceVariant)),
+                        ),
+                      )
+                    else
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: List.generate(_selectedTimes.length, (index) {
+                          final time = _selectedTimes[index];
+                          return InputChip(
+                            label: Text(time.format(context), style: const TextStyle(fontWeight: FontWeight.bold)),
+                            onDeleted: () => _removeTime(index),
+                            deleteIcon: const Icon(Icons.close, size: 16),
+                            backgroundColor: cs.primaryContainer,
+                            labelStyle: TextStyle(color: cs.onPrimaryContainer),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide.none),
+                          );
+                        }),
+                      ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 32),
+
+              // Save Button
               SizedBox(
                 width: double.infinity,
+                height: 56,
                 child: FilledButton(
                   onPressed: _saveReminder,
                   style: FilledButton.styleFrom(
-                    minimumSize: const Size.fromHeight(52),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   ),
-                  child: Text(_isEditing ? 'Update Medication' : 'Save Medication'),
+                  child: Text(
+                    _isEditing ? 'Save Changes' : 'Start Schedule',
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
+              const SizedBox(height: 20),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildSectionHeader(BuildContext context, String title) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: 8),
+      child: Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+    );
+  }
+
+  Widget _buildQuickAddChip(BuildContext context, String label, TimeOfDay time, IconData icon) {
+    return ActionChip(
+      avatar: Icon(icon, size: 16),
+      label: Text(label),
+      onPressed: () => _addTime(time),
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      side: BorderSide(color: Theme.of(context).colorScheme.outline.withOpacity(0.2)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
     );
   }
 }

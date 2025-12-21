@@ -28,6 +28,7 @@ class AppInitializer {
 
       // Feature boxes
       Hive.openBox('blood_sugar_box'),
+      Hive.openBox('blood_pressure_box'),
       Hive.openBox('activity_box'),
       Hive.openBox('meals_box'),
 

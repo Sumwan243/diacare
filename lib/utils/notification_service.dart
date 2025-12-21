@@ -200,15 +200,15 @@ class NotificationService {
         priority: Priority.high,
         playSound: true,
         enableVibration: true,
-        actions: <AndroidNotificationAction>[
-          AndroidNotificationAction(
+        actions: <AndroidNotificationAction<String>>[
+          AndroidNotificationAction<String>(
             _actionTaken,
             'Taken',
             // Reliable for Hive logging: opens app UI so normal isolate is used.
             showsUserInterface: true,
             cancelNotification: true,
           ),
-          AndroidNotificationAction(
+          AndroidNotificationAction<String>(
             _actionSnooze10,
             'Snooze 10m',
             showsUserInterface: true,
@@ -229,8 +229,8 @@ class NotificationService {
         priority: Priority.high,
         playSound: true,
         enableVibration: true,
-        actions: <AndroidNotificationAction>[
-          AndroidNotificationAction(
+        actions: <AndroidNotificationAction<String>>[
+          AndroidNotificationAction<String>(
             _actionTaken,
             'Taken',
             showsUserInterface: true,
