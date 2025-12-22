@@ -2,8 +2,10 @@ import 'package:diacare/providers/activity_provider.dart';
 import 'package:diacare/providers/blood_sugar_provider.dart';
 import 'package:diacare/providers/meal_provider.dart';
 import 'package:diacare/providers/recommendation_provider.dart';
+import 'package:diacare/providers/medication_provider.dart';
 import 'package:diacare/providers/user_profile_provider.dart';
 import 'package:diacare/providers/blood_pressure_provider.dart';
+import 'package:hive/hive.dart';
 import 'package:diacare/screens/activity_history_screen.dart';
 import 'package:diacare/screens/blood_sugar_history_screen.dart';
 import 'package:diacare/screens/blood_pressure_history_screen.dart';
@@ -444,17 +446,58 @@ class _AICard extends StatelessWidget {
 
     return _SurfaceCard(
       onTap: () {
-        // Fetch recommendation when tapped
-        final glucose = bloodSugarProv.entries
-            .take(5)
-            .map((e) => {'level': e.level, 'context': e.context, 'timestamp': e.timestamp.toIso8601String()})
-            .toList();
-        final meals = mealProv.meals
-            .take(5)
-            .map((m) => {'name': m.name, 'calories': m.totalNutrients.caloriesKcal, 'carbs': m.totalNutrients.carbsG})
-            .toList();
-        
-        recommendationProv.fetchRecommendation(glucose: glucose, meals: meals);
+        void gatherAndFetch({bool force = false}) {
+          final glucose = bloodSugarProv.entries
+              .take(10)
+              .map((e) => {'level': e.level, 'context': e.context, 'timestamp': e.timestamp.toIso8601String()})
+              .toList();
+
+          final meals = mealProv.meals
+              .take(5)
+              .map((m) => {'name': m.name, 'calories': m.totalNutrients.caloriesKcal, 'carbs': m.totalNutrients.carbsG})
+              .toList();
+
+          final medProv = context.read<MedicationProvider>();
+          final meds = medProv.reminders
+              .map((m) => {'id': m.id, 'name': m.name})
+              .toList();
+
+          final bpProv = context.read<BloodPressureProvider>();
+          final latestBp = bpProv.getLatestEntry();
+          final bpMap = latestBp != null ? {'systolic': latestBp.systolic, 'diastolic': latestBp.diastolic} : null;
+
+          final activity = context.read<ActivityProvider>().getTodaySummary();
+
+          // Read recent intake logs from Hive
+          List<Map<String, dynamic>> intakeLogs = [];
+          try {
+            final box = Hive.box('med_intake_log_box');
+            for (final v in box.values.take(20)) {
+              if (v is Map) intakeLogs.add(Map<String, dynamic>.from(v));
+            }
+          } catch (_) {
+            intakeLogs = [];
+          }
+
+          recommendationProv.fetchRecommendation(
+            glucose: glucose,
+            meals: meals,
+            medications: meds,
+            bloodPressure: bpMap,
+            activity: activity,
+            intakeLogs: intakeLogs,
+            force: force,
+          );
+        }
+
+        debugPrint('AICard tapped');
+        if (!recommendationProv.isLoading) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Fetching personalized recommendation...')),
+          );
+        }
+
+        gatherAndFetch();
       },
       extraSide: BorderSide(color: cs.primary.withOpacity(0.55), width: 1.2),
       child: Padding(
@@ -486,14 +529,79 @@ class _AICard extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                    recommendationProv.recommendation,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: cs.onSurfaceVariant,
+                    Text(
+                      recommendationProv.recommendation,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            recommendationProv.lastUpdatedDisplay != null
+                                ? 'Updated: ${recommendationProv.lastUpdatedDisplay}'
+                                : 'Tap to get personalized recommendations',
+                            style: theme.textTheme.labelSmall?.copyWith(color: cs.onSurfaceVariant),
+                          ),
+                        ),
+                        IconButton(
+                          icon: Icon(Icons.refresh, size: 18, color: cs.primary),
+                          onPressed: recommendationProv.isLoading
+                              ? null
+                              : () {
+                                  // Force refresh
+                                  void gatherAndFetchForce() {
+                                    final glucose = bloodSugarProv.entries
+                                        .take(10)
+                                        .map((e) => {'level': e.level, 'context': e.context, 'timestamp': e.timestamp.toIso8601String()})
+                                        .toList();
+
+                                    final meals = mealProv.meals
+                                        .take(5)
+                                        .map((m) => {'name': m.name, 'calories': m.totalNutrients.caloriesKcal, 'carbs': m.totalNutrients.carbsG})
+                                        .toList();
+
+                                    final medProv = context.read<MedicationProvider>();
+                                    final meds = medProv.reminders
+                                        .map((m) => {'id': m.id, 'name': m.name})
+                                        .toList();
+
+                                    final bpProv = context.read<BloodPressureProvider>();
+                                    final latestBp = bpProv.getLatestEntry();
+                                    final bpMap = latestBp != null ? {'systolic': latestBp.systolic, 'diastolic': latestBp.diastolic} : null;
+
+                                    final activity = context.read<ActivityProvider>().getTodaySummary();
+
+                                    List<Map<String, dynamic>> intakeLogs = [];
+                                    try {
+                                      final box = Hive.box('med_intake_log_box');
+                                      for (final v in box.values.take(20)) {
+                                        if (v is Map) intakeLogs.add(Map<String, dynamic>.from(v));
+                                      }
+                                    } catch (_) {
+                                      intakeLogs = [];
+                                    }
+
+                                    recommendationProv.fetchRecommendation(
+                                      glucose: glucose,
+                                      meals: meals,
+                                      medications: meds,
+                                      bloodPressure: bpMap,
+                                      activity: activity,
+                                      intakeLogs: intakeLogs,
+                                      force: true,
+                                    );
+                                  }
+
+                                  gatherAndFetchForce();
+                                },
+                        ),
+                      ],
+                    ),
                 ],
               ),
             ),
