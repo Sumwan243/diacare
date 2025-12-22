@@ -636,7 +636,7 @@ class _MealTabState extends State<MealTab> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                       decoration: BoxDecoration(
-                        color: Theme.of(ctx).colorScheme.surfaceVariant,
+                        color: Theme.of(ctx).colorScheme.surfaceContainerHighest,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: Theme.of(ctx).colorScheme.outline.withOpacity(0.2)),
                       ),
