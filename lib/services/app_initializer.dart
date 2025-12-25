@@ -31,6 +31,7 @@ class AppInitializer {
       Hive.openBox('blood_pressure_box'),
       Hive.openBox('activity_box'),
       Hive.openBox('meals_box'),
+      Hive.openBox('hydration_box'), // For water intake tracking
 
       // Cache boxes
       Hive.openBox('ai_nutrition_cache_box'),

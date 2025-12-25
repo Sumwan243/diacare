@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../providers/glucose_provider.dart';
+import '../providers/blood_sugar_provider.dart';
 
 class AddGlucoseScreen extends StatefulWidget {
   const AddGlucoseScreen({Key? key}) : super(key: key);
@@ -15,7 +15,7 @@ class _AddGlucoseScreenState extends State<AddGlucoseScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final glucoseProv = Provider.of<GlucoseProvider>(context, listen: false);
+    final bloodSugarProv = Provider.of<BloodSugarProvider>(context, listen: false);
     return Scaffold(
       appBar: AppBar(title: const Text('Add Glucose')),
       body: Padding(
@@ -40,7 +40,7 @@ class _AddGlucoseScreenState extends State<AddGlucoseScreen> {
               onPressed: () {
                 final mg = double.tryParse(_controller.text);
                 if (mg == null) return;
-                glucoseProv.addEntry(mg, _context);
+                bloodSugarProv.addEntry(mg.toInt(), _context, DateTime.now());
                 Navigator.pop(context);
               },
               child: const Text('Save'),

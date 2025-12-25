@@ -129,8 +129,8 @@ class _RemindersScreenState extends State<RemindersScreen> with WidgetsBindingOb
       // Floating "Add" Button (Alternative to the card in the list)
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _navigateAndRefresh(const AddMedicationScreen()),
-        backgroundColor: cs.primary,
-        foregroundColor: cs.onPrimary,
+        backgroundColor: const Color(0xFFE91E63), // Red for medications
+        foregroundColor: Colors.white,
         icon: const Icon(Icons.add),
         label: const Text("Add Med"),
       ),
@@ -165,13 +165,13 @@ class _RemindersScreenState extends State<RemindersScreen> with WidgetsBindingOb
               margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
               width: 55,
               decoration: BoxDecoration(
-                color: isSelected ? cs.primary : cs.surfaceContainerHighest,
+                color: isSelected ? const Color(0xFFE91E63) : cs.surfaceContainerHighest, // Red for selected
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: isSelected
-                    ? [BoxShadow(color: cs.primary.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))]
+                    ? [BoxShadow(color: const Color(0xFFE91E63).withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))]
                     : [],
                 border: isToday && !isSelected
-                    ? Border.all(color: cs.primary, width: 2)
+                    ? Border.all(color: const Color(0xFFE91E63), width: 2) // Red border for today
                     : null,
               ),
               child: Column(
@@ -238,11 +238,11 @@ class _RemindersScreenState extends State<RemindersScreen> with WidgetsBindingOb
                 value: total == 0 ? 0 : progress,
                 strokeWidth: 6,
                 backgroundColor: cs.surface.withOpacity(0.5),
-                color: cs.primary,
+                color: const Color(0xFFE91E63), // Red progress indicator
               ),
               Text(
                 '${(progress * 100).toInt()}%',
-                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: cs.primary),
+                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: const Color(0xFFE91E63)), // Red text
               )
             ],
           )
@@ -286,8 +286,8 @@ class _RemindersScreenState extends State<RemindersScreen> with WidgetsBindingOb
                 margin: const EdgeInsets.only(top: 20),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: isTaken ? cs.primary : cs.surfaceContainerHighest,
-                  border: Border.all(color: cs.primary, width: 2),
+                  color: isTaken ? const Color(0xFFE91E63) : cs.surfaceContainerHighest, // Red when taken
+                  border: Border.all(color: const Color(0xFFE91E63), width: 2), // Red border
                 ),
               ),
               Expanded(
@@ -372,8 +372,8 @@ class _RemindersScreenState extends State<RemindersScreen> with WidgetsBindingOb
               height: 28,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: isTaken ? cs.primary : Colors.transparent,
-                border: Border.all(color: isTaken ? cs.primary : cs.outline, width: 2),
+                color: isTaken ? const Color(0xFFE91E63) : Colors.transparent, // Red when checked
+                border: Border.all(color: isTaken ? const Color(0xFFE91E63) : cs.outline, width: 2), // Red border when checked
               ),
               child: isTaken
                   ? Icon(Icons.check, size: 16, color: cs.onPrimary)

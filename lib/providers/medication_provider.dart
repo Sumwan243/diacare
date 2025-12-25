@@ -52,22 +52,33 @@ class MedicationProvider extends ChangeNotifier {
   Future<void> _scheduleIfEnabled(MedicationReminder r) async {
     if (!r.isEnabled) return;
 
-    for (final t in r.times) {
-      final baseId = baseIdForReminderTime(r.id, t);
-      await _notifs.scheduleDailySeries(
-        reminder: r,
-        time: t,
-        baseId: baseId,
-        daysAhead: _daysAhead,
-        escalationDelay: const Duration(minutes: 10),
-      );
+    try {
+      for (final t in r.times) {
+        final baseId = baseIdForReminderTime(r.id, t);
+        await _notifs.scheduleDailySeries(
+          reminder: r,
+          time: t,
+          baseId: baseId,
+          daysAhead: _daysAhead,
+          escalationDelay: const Duration(minutes: 10),
+        );
+      }
+      debugPrint('Successfully scheduled reminders for ${r.name}');
+    } catch (e) {
+      debugPrint('Error scheduling reminders for ${r.name}: $e');
+      // Don't throw - let the medication be saved even if notifications fail
     }
   }
 
   Future<void> _cancelAllForReminder(MedicationReminder r) async {
-    for (final t in r.times) {
-      final baseId = baseIdForReminderTime(r.id, t);
-      await _notifs.cancelDailySeries(baseId: baseId, daysAhead: _daysAhead);
+    try {
+      for (final t in r.times) {
+        final baseId = baseIdForReminderTime(r.id, t);
+        await _notifs.cancelDailySeries(baseId: baseId, daysAhead: _daysAhead);
+      }
+    } catch (e) {
+      debugPrint('Error canceling reminders for ${r.name}: $e');
+      // Continue even if cancellation fails
     }
   }
 

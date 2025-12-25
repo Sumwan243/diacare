@@ -30,6 +30,7 @@ class UserProfileProvider extends ChangeNotifier {
     required DiabeticType type,
     double? weight,
     double? height,
+    String? geminiApiKey,
   }) async {
     final profile = UserProfile(
       id: _userProfile?.id ?? const Uuid().v4(),
@@ -37,11 +38,32 @@ class UserProfileProvider extends ChangeNotifier {
       age: age,
       diabeticType: type,
       weightKg: weight ?? 0,
+      geminiApiKey: geminiApiKey,
     );
 
     await _box.clear();
     await _box.add(profile.toMap());
     _userProfile = profile;
+    notifyListeners();
+  }
+
+  Future<void> updateApiKey(String? apiKey) async {
+    if (_userProfile == null) return;
+    
+    final updatedProfile = UserProfile(
+      id: _userProfile!.id,
+      name: _userProfile!.name,
+      age: _userProfile!.age,
+      diabeticType: _userProfile!.diabeticType,
+      weightKg: _userProfile!.weightKg,
+      hypoThreshold: _userProfile!.hypoThreshold,
+      hyperThreshold: _userProfile!.hyperThreshold,
+      geminiApiKey: apiKey,
+    );
+
+    await _box.clear();
+    await _box.add(updatedProfile.toMap());
+    _userProfile = updatedProfile;
     notifyListeners();
   }
 }

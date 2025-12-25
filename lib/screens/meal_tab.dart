@@ -119,13 +119,13 @@ class _MealTabState extends State<MealTab> {
               margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
               width: 55,
               decoration: BoxDecoration(
-                color: isSelected ? cs.primary : cs.surfaceContainerHighest,
+                color: isSelected ? const Color(0xFF2196F3) : cs.surfaceContainerHighest, // Blue for meals
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: isSelected
-                    ? [BoxShadow(color: cs.primary.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))]
+                    ? [BoxShadow(color: const Color(0xFF2196F3).withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 4))]
                     : [],
                 border: isToday && !isSelected
-                    ? Border.all(color: cs.primary, width: 2)
+                    ? Border.all(color: const Color(0xFF2196F3), width: 2) // Blue border for today
                     : null,
               ),
               child: Column(
@@ -176,9 +176,9 @@ class _MealTabState extends State<MealTab> {
       decoration: BoxDecoration(
         color: cs.surfaceContainer,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: cs.outlineVariant.withOpacity(0.2)),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.2)),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))
+          BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))
         ],
       ),
       child: Column(
@@ -197,18 +197,18 @@ class _MealTabState extends State<MealTab> {
                         kcal.toStringAsFixed(0),
                         style: theme.textTheme.headlineMedium?.copyWith(
                             fontWeight: FontWeight.w800,
-                            color: cs.primary
+                            color: const Color(0xFF2196F3) // Blue for calories
                         ),
                       ),
                       Padding(
                         padding: const EdgeInsets.only(bottom: 4, left: 4),
-                        child: Text('kcal', style: TextStyle(color: cs.primary, fontWeight: FontWeight.bold)),
+                        child: Text('kcal', style: TextStyle(color: const Color(0xFF2196F3), fontWeight: FontWeight.bold)), // Blue for kcal
                       ),
                     ],
                   ),
                 ],
               ),
-              Icon(Icons.local_fire_department_rounded, color: cs.primary.withOpacity(0.2), size: 40),
+              Icon(Icons.local_fire_department_rounded, color: const Color(0xFF2196F3).withValues(alpha: 0.2), size: 40), // Blue fire icon
             ],
           ),
           const SizedBox(height: 16),
@@ -305,7 +305,7 @@ class _MealTabState extends State<MealTab> {
           decoration: BoxDecoration(
             color: cs.surfaceContainerLow,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: cs.outlineVariant.withOpacity(0.3)),
+            border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.3)),
           ),
           child: Row(
             children: [
@@ -331,7 +331,7 @@ class _MealTabState extends State<MealTab> {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text('$calText kcal', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                  Text('$carbText g carbs · $proteinText g protein · $fatText g fat', style: TextStyle(color: cs.primary, fontSize: 12, fontWeight: FontWeight.bold)),
+                  Text('$carbText g carbs · $proteinText g protein · $fatText g fat', style: TextStyle(color: const Color(0xFF2196F3), fontSize: 12, fontWeight: FontWeight.bold)), // Blue for macros
                 ],
               ),
             ],
@@ -346,7 +346,7 @@ class _MealTabState extends State<MealTab> {
       padding: const EdgeInsets.symmetric(vertical: 40),
       child: Column(
         children: [
-          Icon(Icons.no_meals_outlined, size: 48, color: theme.colorScheme.outline.withOpacity(0.5)),
+          Icon(Icons.no_meals_outlined, size: 48, color: theme.colorScheme.outline.withValues(alpha: 0.5)),
           const SizedBox(height: 16),
           Text("No meals logged for this day.", style: TextStyle(color: theme.colorScheme.onSurfaceVariant)),
         ],
@@ -362,19 +362,19 @@ class _MealTabState extends State<MealTab> {
       child: Container(
         height: 70,
         decoration: BoxDecoration(
-          border: Border.all(color: cs.primary.withOpacity(0.5), width: 1.5, style: BorderStyle.solid),
+          border: Border.all(color: const Color(0xFF2196F3).withValues(alpha: 0.5), width: 1.5, style: BorderStyle.solid), // Blue border
           borderRadius: BorderRadius.circular(20),
-          color: cs.surfaceContainerLow.withOpacity(0.5),
+          color: cs.surfaceContainerLow.withValues(alpha: 0.5),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.add_circle_outline_rounded, color: cs.primary, size: 28),
+            Icon(Icons.add_circle_outline_rounded, color: const Color(0xFF2196F3), size: 28), // Blue icon
             const SizedBox(width: 12),
             Text(
               "Log Food",
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: cs.primary,
+                color: const Color(0xFF2196F3), // Blue text
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -636,22 +636,22 @@ class _MealTabState extends State<MealTab> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                       decoration: BoxDecoration(
-                        color: Theme.of(ctx).colorScheme.surfaceVariant,
+                        color: Theme.of(ctx).colorScheme.surfaceContainerHighest,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Theme.of(ctx).colorScheme.outline.withOpacity(0.2)),
+                        border: Border.all(color: Theme.of(ctx).colorScheme.outline.withValues(alpha: 0.2)),
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.bakery_dining, color: Theme.of(ctx).colorScheme.primary),
+                          Icon(Icons.bakery_dining, color: const Color(0xFF2196F3)), // Blue icon
                           const SizedBox(width: 12),
                           Expanded(child: Text('Tap to include Injera (Ethiopian bread)')),
                           if (injeraIncluded) Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
-                              color: Theme.of(ctx).colorScheme.primary.withOpacity(0.12),
+                              color: const Color(0xFF2196F3).withValues(alpha: 0.12), // Blue background
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: Text('Included', style: TextStyle(color: Theme.of(ctx).colorScheme.primary)),
+                            child: Text('Included', style: TextStyle(color: const Color(0xFF2196F3))), // Blue text
                           ),
                         ],
                       ),
@@ -972,7 +972,7 @@ class _MealTabState extends State<MealTab> {
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
-                        color: val == selected ? Theme.of(ctx).colorScheme.primary : Theme.of(ctx).colorScheme.onSurface.withOpacity(0.6),
+                        color: val == selected ? const Color(0xFF2196F3) : Theme.of(ctx).colorScheme.onSurface.withValues(alpha: 0.6), // Blue for selected
                       ),
                     ),
                   );

@@ -4,16 +4,19 @@ import 'package:flutter/cupertino.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 
 class AIService {
-  static const String _apiKey = String.fromEnvironment('GEMINI_API_KEY');
+  static const String _fallbackApiKey = String.fromEnvironment('GEMINI_API_KEY');
 
-  Future<Map<String, double>?> estimateNutrition(String foodName, double grams) async {
+  Future<Map<String, double>?> estimateNutrition(String foodName, double grams, {String? userApiKey}) async {
     String? responseText;
     
     try {
-      // Check if API key is set
-      if (_apiKey.trim().isEmpty) {
-        debugPrint('AI Error: GEMINI_API_KEY is not set. Use --dart-define=GEMINI_API_KEY=YOUR_KEY');
-        throw AIException('API key not configured. Please set GEMINI_API_KEY.');
+      // Use user's API key if provided, otherwise fall back to environment variable
+      final apiKey = userApiKey?.trim().isNotEmpty == true ? userApiKey! : _fallbackApiKey;
+      
+      // Check if API key is available
+      if (apiKey.trim().isEmpty) {
+        debugPrint('AI Error: No API key available. User needs to set their Gemini API key in profile settings.');
+        throw AIException('No API key configured. Please set your Gemini API key in profile settings.');
       }
 
       // Validate input
@@ -46,7 +49,7 @@ Return ONLY a JSON object with these keys (values as numbers, no units):
         try {
           final model = GenerativeModel(
             model: modelName,
-            apiKey: _apiKey,
+            apiKey: apiKey,
             generationConfig: GenerationConfig(
               responseMimeType: 'application/json', // Ensures strict JSON output
               temperature: 0.2, // Lower temperature for more consistent results
@@ -144,13 +147,16 @@ Return ONLY a JSON object with these keys (values as numbers, no units):
   }
 
   /// Get personalized health recommendations based on user data
-  Future<String?> getRecommendation(String prompt) async {
+  Future<String?> getRecommendation(String prompt, {String? userApiKey}) async {
     String? responseText;
     
     try {
-      // Check if API key is set
-      if (_apiKey.trim().isEmpty) {
-        debugPrint('AI Error: GEMINI_API_KEY is not set. Use --dart-define=GEMINI_API_KEY=YOUR_KEY');
+      // Use user's API key if provided, otherwise fall back to environment variable
+      final apiKey = userApiKey?.trim().isNotEmpty == true ? userApiKey! : _fallbackApiKey;
+      
+      // Check if API key is available
+      if (apiKey.trim().isEmpty) {
+        debugPrint('AI Error: No API key available. User needs to set their Gemini API key in profile settings.');
         return null;
       }
 
@@ -162,7 +168,7 @@ Return ONLY a JSON object with these keys (values as numbers, no units):
         try {
           final model = GenerativeModel(
             model: modelName,
-            apiKey: _apiKey,
+            apiKey: apiKey,
             generationConfig: GenerationConfig(
               temperature: 0.7, // Slightly higher for more natural recommendations
             ),

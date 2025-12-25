@@ -6,13 +6,14 @@ import 'package:diacare/providers/medication_log_provider.dart';
 import 'package:diacare/providers/medication_provider.dart';
 import 'package:diacare/providers/recommendation_provider.dart';
 import 'package:diacare/providers/user_profile_provider.dart';
+import 'package:diacare/providers/hydration_provider.dart';
 import 'package:diacare/services/app_initializer.dart';
+import 'package:diacare/services/permission_service.dart';
 import 'package:diacare/theme/app_theme.dart';
-import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import 'screens/home_screen.dart';
+import 'screens/main_navigation_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -33,6 +34,7 @@ Future<void> main() async {
         ChangeNotifierProvider(create: (_) => MealProvider()),
         ChangeNotifierProvider(create: (_) => MedicationLogProvider()),
         ChangeNotifierProvider(create: (_) => RecommendationProvider()),
+        ChangeNotifierProvider(create: (_) => HydrationProvider()),
       ],
       child: const MyApp(),
     ),
@@ -47,16 +49,13 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
-  ColorScheme? _lightScheme;
-  ColorScheme? _darkScheme;
   MedicationProvider? _medicationProvider;
+  bool _permissionsRequested = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // Initial fetch of the dynamic color palette.
-    _updateColorSchemes();
   }
 
   @override
@@ -64,6 +63,14 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     super.didChangeDependencies();
     // Initialize medication provider reference early to avoid null in lifecycle callbacks
     _medicationProvider ??= Provider.of<MedicationProvider>(context, listen: false);
+    
+    // Request permissions on first build
+    if (!_permissionsRequested) {
+      _permissionsRequested = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        PermissionService.requestAllPermissions(context);
+      });
+    }
   }
 
   @override
@@ -72,29 +79,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     super.dispose();
   }
 
-  // Manually fetches the system color palette and updates the state.
-  // This gives us control to prevent the "flash" of the fallback theme.
-  Future<void> _updateColorSchemes() async {
-    final corePalette = await DynamicColorPlugin.getCorePalette();
-    if (mounted) {
-      setState(() {
-        if (corePalette != null) {
-          _lightScheme = corePalette.toColorScheme();
-          _darkScheme = corePalette.toColorScheme(brightness: Brightness.dark);
-        } else {
-          _lightScheme = null;
-          _darkScheme = null;
-        }
-      });
-    }
-  }
-
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      // When the app resumes, re-fetch the colors in case the wallpaper changed.
-      _updateColorSchemes();
-      
       // Reschedule medication reminders when app resumes to ensure
       // notifications are always scheduled for the next 7 days
       _medicationProvider?.rescheduleAllReminders();
@@ -106,15 +93,14 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     // Store medication provider reference for lifecycle callbacks
     _medicationProvider ??= Provider.of<MedicationProvider>(context, listen: false);
     
-    // No longer using DynamicColorBuilder. We now control the state.
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'DiaCare',
-      // The theme now uses the schemes from our state, preventing the flash.
-      theme: AppTheme.lightTheme(_lightScheme),
-      darkTheme: AppTheme.darkTheme(_darkScheme),
+      // Use medical themes - prioritize medical consistency over dynamic colors
+      theme: AppTheme.lightTheme(null), // Pass null to use medical theme
+      darkTheme: AppTheme.darkTheme(null), // Pass null to use medical theme
       themeMode: ThemeMode.system,
-      home: const HomeScreen(),
+      home: const MainNavigationScreen(),
     );
   }
 }

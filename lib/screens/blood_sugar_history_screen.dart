@@ -165,8 +165,8 @@ class _BloodSugarHistoryScreenState extends State<BloodSugarHistoryScreen> {
                           fontSize: 32,
                           fontWeight: FontWeight.bold,
                           color: index == selectedLevel
-                              ? Theme.of(ctx).colorScheme.primary
-                              : Theme.of(ctx).colorScheme.onSurface.withOpacity(0.6),
+                              ? const Color(0xFF4CAF50) // Green for glucose
+                              : Theme.of(ctx).colorScheme.onSurface.withValues(alpha: 0.6),
                         ),
                       ),
                     );
@@ -299,7 +299,7 @@ class _AddGlucoseCard extends StatelessWidget {
     final cs = theme.colorScheme;
     return Card(
       elevation: 0,
-      color: cs.primaryContainer.withOpacity(0.4), // Softer Look
+      color: cs.primaryContainer.withValues(alpha: 0.4), // Softer Look
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: InkWell(
         onTap: onTap,
@@ -309,9 +309,9 @@ class _AddGlucoseCard extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.add_circle, size: 28, color: cs.primary),
+              Icon(Icons.add_circle, size: 28, color: const Color(0xFF4CAF50)), // Green add icon
               const SizedBox(width: 12),
-              Text('Log New Glucose Level', style: theme.textTheme.titleMedium?.copyWith(color: cs.primary, fontWeight: FontWeight.bold)),
+              Text('Log New Glucose Level', style: theme.textTheme.titleMedium?.copyWith(color: const Color(0xFF4CAF50), fontWeight: FontWeight.bold)), // Green text
             ],
           ),
         ),
@@ -337,14 +337,14 @@ class _StatsDashboard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
       decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest.withOpacity(0.5),
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: cs.outlineVariant.withOpacity(0.3)),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          _buildCompactStat(context, 'Average', stats.avg.toStringAsFixed(0), cs.primary),
+          _buildCompactStat(context, 'Average', stats.avg.toStringAsFixed(0), const Color(0xFF4CAF50)), // Green for average glucose
           _buildDivider(context),
           _buildCompactStat(context, 'Lowest', stats.min.toString(), _getSeverityColor(stats.min, targetMin, targetMax)),
           _buildDivider(context),
@@ -429,7 +429,7 @@ class _EntryTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: cs.surfaceContainerLow, // Lighter background than before
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: cs.outlineVariant.withOpacity(0.3)), // Subtle border
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.3)), // Subtle border
       ),
       child: ListTile(
         onTap: onTap,
@@ -492,12 +492,12 @@ class _CalendarView extends StatelessWidget {
         // 1. Calendar Edge & Shadow
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05), // Lighter shadow
+            color: Colors.black.withValues(alpha: 0.05), // Lighter shadow
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
         ],
-        border: Border.all(color: cs.outlineVariant.withOpacity(0.5)),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.5)),
       ),
       padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
       child: TableCalendar(

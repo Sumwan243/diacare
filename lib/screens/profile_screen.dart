@@ -14,7 +14,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _ageController = TextEditingController();
+  final _apiKeyController = TextEditingController();
   DiabeticType _selectedType = DiabeticType.type2;
+  bool _showApiKey = false;
 
   @override
   void initState() {
@@ -25,6 +27,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _nameController.text = profile.name;
       _ageController.text = profile.age.toString();
       _selectedType = profile.diabeticType;
+      _apiKeyController.text = profile.geminiApiKey ?? '';
     }
   }
 
@@ -65,6 +68,59 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   if (value != null) setState(() => _selectedType = value);
                 },
               ),
+              const SizedBox(height: 24),
+              
+              // AI Settings Section
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.psychology_outlined, color: Theme.of(context).colorScheme.primary),
+                          const SizedBox(width: 8),
+                          Text(
+                            'AI Health Insights',
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'To get personalized diabetes recommendations, you need a Gemini API key from Google AI Studio.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _apiKeyController,
+                        decoration: InputDecoration(
+                          labelText: 'Gemini API Key (Optional)',
+                          hintText: 'AIzaSy...',
+                          suffixIcon: IconButton(
+                            icon: Icon(_showApiKey ? Icons.visibility_off : Icons.visibility),
+                            onPressed: () => setState(() => _showApiKey = !_showApiKey),
+                          ),
+                          helperText: 'Get your free API key from ai.google.dev',
+                        ),
+                        obscureText: !_showApiKey,
+                        validator: (value) {
+                          if (value != null && value.isNotEmpty && !value.startsWith('AIza')) {
+                            return 'API key should start with "AIza"';
+                          }
+                          return null;
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              
               const SizedBox(height: 32),
               ElevatedButton(
                 onPressed: () {
@@ -73,6 +129,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           name: _nameController.text,
                           age: int.parse(_ageController.text),
                           type: _selectedType,
+                          geminiApiKey: _apiKeyController.text.trim().isEmpty ? null : _apiKeyController.text.trim(),
                         );
                     Navigator.pop(context);
                   }

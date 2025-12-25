@@ -43,3 +43,10 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+.kiro/specs/codebase-cleanup/tasks.md
+.kiro/specs/codebase-cleanup/design.md
+.kiro/specs/codebase-cleanup/requirements.md
+.kiro/specs/glucose-tracking-layout/design.md
+.kiro/specs/glucose-tracking-layout/requirements.md
+.kiro/specs/glucose-tracking-layout/tasks.md
+.kiro/specs/medication-adherence-tracking/requirements.md

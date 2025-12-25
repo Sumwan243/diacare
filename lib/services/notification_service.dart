@@ -33,49 +33,69 @@ class NotificationService {
   Future<void> init() async {
     if (_initialized) return;
 
-    tzdata.initializeTimeZones();
+    try {
+      tzdata.initializeTimeZones();
 
-    const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+      const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
 
-    const iosInit = DarwinInitializationSettings(
-      requestAlertPermission: true,
-      requestBadgePermission: true,
-      requestSoundPermission: true,
-    );
-
-    const settings = InitializationSettings(android: androidInit, iOS: iosInit);
-
-    await _plugin.initialize(
-      settings,
-      onDidReceiveNotificationResponse: _onNotificationResponse,
-    );
-
-    final android = _plugin.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
-    await android?.requestNotificationsPermission();
-
-    // Create channels (Android 8+)
-    if (android != null) {
-      await android.createNotificationChannel(
-        const AndroidNotificationChannel(
-          _medChannelId,
-          'Medications',
-          description: 'Medication reminders.',
-          importance: Importance.max,
-        ),
+      const iosInit = DarwinInitializationSettings(
+        requestAlertPermission: true,
+        requestBadgePermission: true,
+        requestSoundPermission: true,
       );
 
-      await android.createNotificationChannel(
-        const AndroidNotificationChannel(
-          _medEscalationChannelId,
-          'Medication Escalations',
-          description: 'Follow-up alerts if a dose is not confirmed.',
-          importance: Importance.max,
-        ),
+      const settings = InitializationSettings(android: androidInit, iOS: iosInit);
+
+      await _plugin.initialize(
+        settings,
+        onDidReceiveNotificationResponse: _onNotificationResponse,
       );
+
+      final android = _plugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+      
+      // Request notification permission for Android 13+
+      if (android != null) {
+        final permissionGranted = await android.requestNotificationsPermission();
+        debugPrint('Notification permission granted: $permissionGranted');
+        
+        // Create channels (Android 8+)
+        await android.createNotificationChannel(
+          const AndroidNotificationChannel(
+            _medChannelId,
+            'Medications',
+            description: 'Medication reminders.',
+            importance: Importance.max,
+          ),
+        );
+
+        await android.createNotificationChannel(
+          const AndroidNotificationChannel(
+            _medEscalationChannelId,
+            'Medication Escalations',
+            description: 'Follow-up alerts if a dose is not confirmed.',
+            importance: Importance.max,
+          ),
+        );
+        
+        // Create instant notification channel
+        await android.createNotificationChannel(
+          const AndroidNotificationChannel(
+            'instant',
+            'Instant Alerts',
+            description: 'Immediate confirmation messages.',
+            importance: Importance.max,
+          ),
+        );
+      }
+
+      _initialized = true;
+      debugPrint('Notification service initialized successfully');
+    } catch (e) {
+      debugPrint('Error initializing notification service: $e');
+      // Don't throw - let the app continue without notifications
+      _initialized = false;
     }
-
-    _initialized = true;
   }
 
   Future<void> scheduleDailySeries({
@@ -85,53 +105,66 @@ class NotificationService {
     int daysAhead = 7,
     Duration escalationDelay = const Duration(minutes: 10),
   }) async {
-    if (!_initialized) await init();
+    try {
+      if (!_initialized) await init();
+      
+      // Check if initialization was successful
+      if (!_initialized) {
+        debugPrint('Cannot schedule notifications - service not initialized');
+        return;
+      }
 
-    final now = tz.TZDateTime.now(tz.local);
+      final now = tz.TZDateTime.now(tz.local);
 
-    for (int i = 0; i < daysAhead; i++) {
-      final day = tz.TZDateTime(
-        tz.local,
-        now.year,
-        now.month,
-        now.day + i,
-        time.hour,
-        time.minute,
-      );
+      for (int i = 0; i < daysAhead; i++) {
+        final day = tz.TZDateTime(
+          tz.local,
+          now.year,
+          now.month,
+          now.day + i,
+          time.hour,
+          time.minute,
+        );
 
-      if (day.isBefore(now)) continue;
+        if (day.isBefore(now)) continue;
 
-      final primaryId = _idForDay(baseId, day, kind: _Kind.primary);
-      final escalationId = _idForDay(baseId, day, kind: _Kind.escalation);
+        final primaryId = _idForDay(baseId, day, kind: _Kind.primary);
+        final escalationId = _idForDay(baseId, day, kind: _Kind.escalation);
 
-      final payload = jsonEncode({
-        'type': 'med',
-        'reminderId': reminder.id,
-        'reminderName': reminder.name,
-        'scheduledIso': day.toIso8601String(),
-        'primaryId': primaryId,
-        'escalationId': escalationId,
-      });
+        final payload = jsonEncode({
+          'type': 'med',
+          'reminderId': reminder.id,
+          'reminderName': reminder.name,
+          'scheduledIso': day.toIso8601String(),
+          'primaryId': primaryId,
+          'escalationId': escalationId,
+        });
 
-      final escalationTime = day.add(escalationDelay);
+        final escalationTime = day.add(escalationDelay);
 
-      await _scheduleWithFallback(
-        id: primaryId,
-        title: 'Medication Reminder',
-        body: 'Time to take your ${reminder.name}.',
-        when: day,
-        details: _primaryDetails(),
-        payload: payload,
-      );
+        await _scheduleWithFallback(
+          id: primaryId,
+          title: 'Medication Reminder',
+          body: 'Time to take your ${reminder.name}.',
+          when: day,
+          details: _primaryDetails(),
+          payload: payload,
+        );
 
-      await _scheduleWithFallback(
-        id: escalationId,
-        title: 'Missed Medication?',
-        body: 'Please confirm you took ${reminder.name}.',
-        when: escalationTime,
-        details: _escalationDetails(),
-        payload: payload,
-      );
+        await _scheduleWithFallback(
+          id: escalationId,
+          title: 'Missed Medication?',
+          body: 'Please confirm you took ${reminder.name}.',
+          when: escalationTime,
+          details: _escalationDetails(),
+          payload: payload,
+        );
+      }
+      
+      debugPrint('Successfully scheduled notifications for ${reminder.name}');
+    } catch (e) {
+      debugPrint('Error scheduling medication reminders: $e');
+      // Don't throw - let the medication be saved without notifications
     }
   }
 
@@ -225,18 +258,26 @@ class NotificationService {
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
       );
-    } catch (_) {
-      await _plugin.zonedSchedule(
-        id,
-        title,
-        body,
-        when,
-        details,
-        payload: payload,
-        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-        uiLocalNotificationDateInterpretation:
-            UILocalNotificationDateInterpretation.absoluteTime,
-      );
+      debugPrint('Scheduled notification $id for ${when.toString()}');
+    } catch (e) {
+      debugPrint('Exact scheduling failed for $id: $e, trying inexact...');
+      try {
+        await _plugin.zonedSchedule(
+          id,
+          title,
+          body,
+          when,
+          details,
+          payload: payload,
+          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+          uiLocalNotificationDateInterpretation:
+              UILocalNotificationDateInterpretation.absoluteTime,
+        );
+        debugPrint('Inexact scheduling succeeded for $id');
+      } catch (e2) {
+        debugPrint('Both exact and inexact scheduling failed for $id: $e2');
+        // Don't throw - let the app continue
+      }
     }
   }
 

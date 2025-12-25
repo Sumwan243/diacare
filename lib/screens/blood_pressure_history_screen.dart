@@ -193,7 +193,7 @@ class _BloodPressureHistoryScreenState extends State<BloodPressureHistoryScreen>
                                     style: TextStyle(
                                       fontSize: 22,
                                       fontWeight: FontWeight.bold,
-                                      color: val == systolic ? Theme.of(ctx).colorScheme.primary : Theme.of(ctx).colorScheme.onSurface.withOpacity(0.6),
+                                      color: val == systolic ? const Color(0xFFE91E63) : Theme.of(ctx).colorScheme.onSurface.withValues(alpha: 0.6), // Red for selected systolic
                                     ),
                                   ),
                                 );
@@ -226,7 +226,7 @@ class _BloodPressureHistoryScreenState extends State<BloodPressureHistoryScreen>
                                     style: TextStyle(
                                       fontSize: 22,
                                       fontWeight: FontWeight.bold,
-                                      color: val == diastolic ? Theme.of(ctx).colorScheme.primary : Theme.of(ctx).colorScheme.onSurface.withOpacity(0.6),
+                                      color: val == diastolic ? const Color(0xFFE91E63) : Theme.of(ctx).colorScheme.onSurface.withValues(alpha: 0.6), // Red for selected diastolic
                                     ),
                                   ),
                                 );
@@ -360,7 +360,7 @@ class _AddBPCard extends StatelessWidget {
     final cs = theme.colorScheme;
     return Card(
       elevation: 0,
-      color: cs.primaryContainer.withOpacity(0.4),
+      color: cs.primaryContainer.withValues(alpha: 0.4),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: InkWell(
         onTap: onTap,
@@ -370,9 +370,9 @@ class _AddBPCard extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.add_circle, size: 28, color: cs.primary),
+              Icon(Icons.add_circle, size: 28, color: const Color(0xFFE91E63)), // Red add icon
               const SizedBox(width: 12),
-              Text('Log New Blood Pressure', style: theme.textTheme.titleMedium?.copyWith(color: cs.primary, fontWeight: FontWeight.bold)),
+              Text('Log New Blood Pressure', style: theme.textTheme.titleMedium?.copyWith(color: const Color(0xFFE91E63), fontWeight: FontWeight.bold)), // Red text
             ],
           ),
         ),
@@ -397,14 +397,14 @@ class _StatsDashboardBP extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
       decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest.withOpacity(0.5),
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: cs.outlineVariant.withOpacity(0.3)),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          _buildCompactStat(context, 'Average', '${stats.avgSystolic.toStringAsFixed(0)}/${stats.avgDiastolic.toStringAsFixed(0)}', cs.primary),
+          _buildCompactStat(context, 'Average', '${stats.avgSystolic.toStringAsFixed(0)}/${stats.avgDiastolic.toStringAsFixed(0)}', const Color(0xFFE91E63)), // Red for average
           _buildDivider(context),
           _buildCompactStat(context, 'Lowest', '${stats.minSystolic}/${stats.minDiastolic}', _getBPSeverityColor(stats.minSystolic, sysTargetMin, sysTargetMax)),
           _buildDivider(context),
@@ -467,7 +467,7 @@ class _EntryTileBP extends StatelessWidget {
       decoration: BoxDecoration(
         color: cs.surfaceContainerLow,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: cs.outlineVariant.withOpacity(0.3)),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.3)),
       ),
       child: ListTile(
         dense: true,
@@ -509,8 +509,8 @@ class _CalendarView extends StatelessWidget {
       decoration: BoxDecoration(
         color: cs.surface,
         borderRadius: BorderRadius.circular(24),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0,4))],
-        border: Border.all(color: cs.outlineVariant.withOpacity(0.5)),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0,4))],
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.5)),
       ),
       padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
       child: TableCalendar(

@@ -8,6 +8,7 @@ class UserProfile {
   int age;
   double hypoThreshold;
   double hyperThreshold;
+  String? geminiApiKey; // Store user's Gemini API key
 
   UserProfile({
     required this.id,
@@ -17,6 +18,7 @@ class UserProfile {
     this.age = 0,
     this.hypoThreshold = 70,
     this.hyperThreshold = 300,
+    this.geminiApiKey,
   });
 
   Map<String, dynamic> toMap() => {
@@ -27,6 +29,7 @@ class UserProfile {
         'age': age,
         'hypoThreshold': hypoThreshold,
         'hyperThreshold': hyperThreshold,
+        'geminiApiKey': geminiApiKey,
       };
 
   factory UserProfile.fromMap(Map m) => UserProfile(
@@ -37,5 +40,6 @@ class UserProfile {
         age: (m['age'] ?? 0) as int,
         hypoThreshold: (m['hypoThreshold'] ?? 70).toDouble(),
         hyperThreshold: (m['hyperThreshold'] ?? 300).toDouble(),
+        geminiApiKey: m['geminiApiKey'] as String?,
       );
 }
