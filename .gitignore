@@ -80,3 +80,4 @@ ehthumbs.db
 # Update directories
 _update*
 _backup*
+*.md

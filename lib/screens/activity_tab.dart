@@ -38,21 +38,25 @@ class _ActivityTabState extends State<ActivityTab> {
   }
 
   Future<void> _initPlatformState() async {
+    print('Initializing pedometer...');
+    
     setState(() {
       _isInitializing = true;
       _permissionGranted = false;
     });
 
     // 1. Check Permission (Activity Recognition)
-    // On Android 10+ (Pixel etc), this is required.
     var status = await Permission.activityRecognition.status;
+    print('Activity recognition permission status: $status');
+    
     if (status.isDenied) {
+      print('Requesting activity recognition permission...');
       status = await Permission.activityRecognition.request();
+      print('Permission request result: $status');
     }
 
     if (status.isPermanentlyDenied) {
-      // User selected "Don't ask again" or denied it in settings.
-      // We MUST send them to settings to enable it on Pixel phones.
+      print('Permission permanently denied');
       if (mounted) {
         setState(() {
           _isInitializing = false;
@@ -65,6 +69,7 @@ class _ActivityTabState extends State<ActivityTab> {
     }
 
     if (!status.isGranted) {
+      print('Permission not granted');
       if (mounted) {
         setState(() {
           _isInitializing = false;
@@ -74,61 +79,106 @@ class _ActivityTabState extends State<ActivityTab> {
       return;
     }
 
+    print('Permission granted, initializing pedometer streams...');
+
     // 2. Initialize Pedometer
     try {
       _pedestrianStatusSubscription = Pedometer.pedestrianStatusStream.listen(
-          _onPedestrianStatusChanged,
-          onError: _onPedestrianStatusError);
-      _stepCountSubscription = Pedometer.stepCountStream.listen(_onStepCount,
-          onError: _onStepCountError);
-      // If we got here, we assume permission is okay and wait for first stream event
+        _onPedestrianStatusChanged,
+        onError: _onPedestrianStatusError,
+        onDone: () => print('Pedestrian status stream done'),
+      );
+      
+      _stepCountSubscription = Pedometer.stepCountStream.listen(
+        _onStepCount,
+        onError: _onStepCountError,
+        onDone: () => print('Step count stream done'),
+      );
+      
+      print('Pedometer streams initialized successfully');
+      
+      // Set a timeout to detect if no data is received
+      Timer(const Duration(seconds: 10), () {
+        if (_isInitializing && mounted) {
+          print('No step data received within 10 seconds');
+          setState(() {
+            _isInitializing = false;
+            _permissionGranted = true; // Permission is granted but no data
+            _status = 'No Data';
+          });
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Step sensor may not be available on this device or emulator'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      });
+      
     } catch (e) {
-      print('Pedometer Error: $e');
+      print('Pedometer initialization error: $e');
       if (mounted) {
         setState(() {
           _isInitializing = false;
           _permissionGranted = false;
         });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to initialize step tracking: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     }
   }
 
   void _onStepCount(StepCount event) async {
-    // The sensor gives 'steps since boot'.
-    // We need to calculate 'Daily Steps' by comparing with a saved value.
+    print('Step count received: ${event.steps}');
+    
     final prefs = await SharedPreferences.getInstance();
-    final int storedStepsAtMidnight = prefs.getInt('steps_at_midnight') ?? 0;
-    int todaySteps = 0;
+    final today = DateTime.now().toIso8601String().split('T')[0];
+    final lastResetDate = prefs.getString('last_reset_date') ?? '';
+    
     int bootSteps = event.steps;
-
-    // If the current boot steps are less than what we stored, the phone rebooted.
-    // Or it's a new day, and we need to reset.
-    // Note: This logic assumes you check for 'new day' elsewhere or reset 'steps_at_midnight' at midnight.
-    // Simple logic: Steps Today = (Current Boot Steps) - (Boot Steps at App Start)
-    // To make this accurate across reboots, you should save 'steps_at_midnight' whenever the day changes.
-    // For this example, we calculate steps relative to the last saved value:
-    if (storedStepsAtMidnight == 0 || bootSteps < storedStepsAtMidnight) {
-      // First run today OR phone rebooted.
-      // We treat current steps as the baseline for "Now" but for a real app,
-      // you need a separate logic to reset the counter at exactly 00:00.
-      // Let's save the current boot steps as the baseline for now to prevent jumping
-      if (storedStepsAtMidnight == 0) {
-        await prefs.setInt('steps_at_midnight', bootSteps);
+    int todaySteps = 0;
+    
+    // Check if it's a new day
+    if (lastResetDate != today) {
+      // New day - reset the baseline
+      await prefs.setInt('daily_step_baseline', bootSteps);
+      await prefs.setString('last_reset_date', today);
+      todaySteps = 0;
+      print('New day detected, resetting baseline to: $bootSteps');
+    } else {
+      // Same day - calculate steps from baseline
+      final baseline = prefs.getInt('daily_step_baseline') ?? bootSteps;
+      
+      // Handle phone reboot (boot steps less than baseline)
+      if (bootSteps < baseline) {
+        // Phone was rebooted, add previous steps to current
+        final previousSteps = prefs.getInt('steps_before_reboot') ?? 0;
+        todaySteps = previousSteps + bootSteps;
+        await prefs.setInt('daily_step_baseline', 0); // Reset baseline after reboot
+        print('Reboot detected, previous: $previousSteps, current: $bootSteps');
+      } else {
+        todaySteps = bootSteps - baseline;
       }
     }
 
-    // Calculate Difference
-    final int savedBaseline = prefs.getInt('steps_at_midnight') ?? bootSteps;
-    todaySteps = bootSteps - savedBaseline;
+    // Save current state in case of reboot
+    await prefs.setInt('steps_before_reboot', todaySteps);
 
     if (mounted) {
       setState(() {
         _stepsSinceBoot = bootSteps;
-        // Ensure steps don't go negative if logic fails
         _currentSteps = todaySteps > 0 ? todaySteps : 0;
         _isInitializing = false;
         _permissionGranted = true;
       });
+      
+      print('Updated UI - Boot steps: $bootSteps, Today steps: $_currentSteps');
     }
   }
 
@@ -142,13 +192,25 @@ class _ActivityTabState extends State<ActivityTab> {
 
   void _onStepCountError(error) {
     print('Step Count Error: $error');
-    // On Pixels, if permission is missing, it might throw here or stream nothing.
+    
     if (mounted) {
       setState(() {
         _isInitializing = false;
         _permissionGranted = false;
       });
-      _showOpenSettingsDialog();
+      
+      // Show more specific error handling
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Step tracking error: ${error.toString()}'),
+          backgroundColor: Colors.red,
+          action: SnackBarAction(
+            label: 'Retry',
+            textColor: Colors.white,
+            onPressed: () => _initPlatformState(),
+          ),
+        ),
+      );
     }
   }
 
@@ -183,6 +245,64 @@ class _ActivityTabState extends State<ActivityTab> {
     );
   }
 
+  Future<void> _showDebugInfo() async {
+    final prefs = await SharedPreferences.getInstance();
+    final baseline = prefs.getInt('daily_step_baseline') ?? 0;
+    final lastResetDate = prefs.getString('last_reset_date') ?? 'Never';
+    final stepsBeforeReboot = prefs.getInt('steps_before_reboot') ?? 0;
+    final today = DateTime.now().toIso8601String().split('T')[0];
+    
+    final permissionStatus = await Permission.activityRecognition.status;
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Step Tracking Debug'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Permission Status: $permissionStatus'),
+              Text('Current Steps: $_currentSteps'),
+              Text('Steps Since Boot: $_stepsSinceBoot'),
+              Text('Daily Baseline: $baseline'),
+              Text('Steps Before Reboot: $stepsBeforeReboot'),
+              Text('Last Reset Date: $lastResetDate'),
+              Text('Today: $today'),
+              Text('Status: $_status'),
+              Text('Permission Granted: $_permissionGranted'),
+              Text('Is Initializing: $_isInitializing'),
+              const SizedBox(height: 16),
+              const Text('Troubleshooting:'),
+              const Text('• If running on emulator, step sensor may not work'),
+              const Text('• Try walking with your phone to generate steps'),
+              const Text('• Check if other fitness apps can detect steps'),
+              const Text('• Restart the app after granting permissions'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              // Reset all stored data
+              await prefs.remove('daily_step_baseline');
+              await prefs.remove('last_reset_date');
+              await prefs.remove('steps_before_reboot');
+              Navigator.pop(context);
+              _initPlatformState();
+            },
+            child: const Text('Reset & Retry'),
+          ),
+        ],
+      ),
+    );
+  }
+
   // Helper to reset steps at midnight (call this from a timer or app lifecycle in a real app)
   Future<void> _resetStepsIfNewDay() async {
     final prefs = await SharedPreferences.getInstance();
@@ -190,11 +310,8 @@ class _ActivityTabState extends State<ActivityTab> {
     final today = DateTime.now().toIso8601String().split('T')[0];
 
     if (lastResetDate != today) {
-      await prefs.setInt('steps_at_midnight', _stepsSinceBoot);
-      await prefs.setString('last_reset_date', today);
-      setState(() {
-        _currentSteps = 0;
-      });
+      print('New day detected in build, but reset should happen in _onStepCount');
+      // Don't reset here, let _onStepCount handle it when new data comes in
     }
   }
 
@@ -356,6 +473,35 @@ class _ActivityTabState extends State<ActivityTab> {
                         context, Icons.directions_walk, _status, 'Status')),
               ],
             ),
+            const SizedBox(height: 16),
+            // Debug button
+            TextButton.icon(
+              onPressed: _showDebugInfo,
+              icon: const Icon(Icons.info_outline, size: 16),
+              label: const Text('Debug Info', style: TextStyle(fontSize: 12)),
+              style: TextButton.styleFrom(
+                foregroundColor: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            // Test button for emulator/debugging
+            TextButton.icon(
+              onPressed: () {
+                setState(() {
+                  _currentSteps += 100; // Add 100 test steps
+                });
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Added 100 test steps'),
+                    duration: Duration(seconds: 1),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.add, size: 16),
+              label: const Text('Add Test Steps', style: TextStyle(fontSize: 12)),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.orange,
+              ),
+            ),
           ],
         ),
       ),
@@ -397,6 +543,18 @@ class _ActivityTabState extends State<ActivityTab> {
               label: const Text('Grant Permission'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: MedicalTheme.activityPurple,
+                foregroundColor: Colors.white,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              ),
+            ),
+            const SizedBox(height: 8),
+            ElevatedButton.icon(
+              onPressed: () => _showDebugInfo(),
+              icon: const Icon(Icons.bug_report),
+              label: const Text('Debug Info'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange,
                 foregroundColor: Colors.white,
                 padding:
                     const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
