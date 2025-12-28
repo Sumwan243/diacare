@@ -1,4 +1,5 @@
 import 'package:diacare/services/notification_service.dart';
+import 'package:diacare/services/smart_notification_service.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -35,11 +36,15 @@ class AppInitializer {
 
       // Cache boxes
       Hive.openBox('ai_nutrition_cache_box'),
+      
+      // Settings box for smart notifications
+      Hive.openBox('settings_box'),
     ]);
   }
 
   /// Initializes other app services.
   Future<void> _initServices() async {
     await NotificationService().init();
+    await SmartNotificationService().initialize();
   }
 }

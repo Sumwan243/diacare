@@ -166,9 +166,15 @@ class RecommendationProvider extends ChangeNotifier {
         }).join('\n');
 
         prompt = '''
-You are an expert diabetes health assistant named DiaCare AI. The user's name is $name.
+You are DiaCare AI, a friendly and personalized diabetes health assistant. The user's name is $name.
 
-CURRENT HEALTH CONTEXT:
+CONVERSATION CONTEXT:
+$historyText
+
+USER'S CURRENT QUESTION: "$followUpQuestion"
+QUESTION TYPE: $questionType
+
+$name's CURRENT HEALTH DATA:
 - Glucose: $glucoseAnalysis
 - Blood Pressure: $bpAnalysis
 - Meals: $mealsAnalysis
@@ -176,28 +182,62 @@ CURRENT HEALTH CONTEXT:
 - Activity: $activityAnalysis
 - Medication Intake: $intakeAnalysis
 
-CONVERSATION HISTORY:
-$historyText
+RESPONSE GUIDELINES:
+1. ALWAYS respond to the user - never say you don't have data unless they specifically ask about missing health metrics
+2. For greetings (hi, hello, how are you): Respond warmly and offer to help with their diabetes management
+3. For general questions: Answer helpfully and relate to diabetes management when relevant
+4. For health questions: Use their actual data to provide specific, personalized advice
+5. For "what should I do" questions: Give 2-3 specific actionable steps
+6. For "why" questions: Explain the medical reasoning in simple terms
+7. Be conversational, supportive, and use $name's name naturally
+8. If they ask about trends, analyze patterns in their data over time
+9. Always be encouraging and positive while being medically accurate
+10. For non-health topics: Still respond helpfully but gently guide back to health topics
 
-USER'S QUESTION TYPE: $questionType
-USER'S CURRENT QUESTION: "$followUpQuestion"
-
-RESPONSE INSTRUCTIONS:
-1. DIRECTLY answer the specific question asked - don't give generic advice
-2. Use $name's actual health data to provide personalized, specific responses
-3. If asking about trends, analyze patterns in their data
-4. If asking "why" questions, explain the medical reasoning
-5. If asking "what should I do", provide specific actionable steps
-6. If asking about symptoms, relate to their current readings
-7. If asking about food/meals, reference their logged nutrition data
-8. Be conversational and supportive, not clinical
-9. Always reference their specific data points when relevant
-10. If you don't have enough data to answer specifically, say so and suggest what data would help
-
-CRITICAL: Answer the EXACT question asked. Don't deflect to general advice.
+CRITICAL: Never refuse to answer or say you lack data for basic conversation. Always engage meaningfully.
 ''';
       } else {
-        // Enhanced initial recommendation with better context analysis
+        // Enhanced initial recommendation with better personalization
+        prompt = '''
+You are DiaCare AI, $name's personal diabetes health assistant and companion.
+
+COMPREHENSIVE HEALTH ANALYSIS FOR $name:
+
+GLUCOSE PATTERNS & ALERTS:
+$glucoseAnalysis
+
+BLOOD PRESSURE STATUS:
+$bpAnalysis
+
+NUTRITION & MEAL TRACKING:
+$mealsAnalysis
+
+MEDICATION MANAGEMENT:
+$medsAnalysis
+
+PHYSICAL ACTIVITY:
+$activityAnalysis
+
+MEDICATION ADHERENCE:
+$intakeAnalysis
+
+PERSONALIZED RECOMMENDATION REQUIREMENTS:
+1. Address $name personally and warmly - make this feel like a conversation with a knowledgeable friend
+2. PRIORITIZE any urgent health alerts (glucose >180 or <70, BP >140/90) with immediate action steps
+3. Analyze PATTERNS and TRENDS in their data, not just latest readings
+4. Provide 2-3 SPECIFIC, actionable recommendations based on their actual data
+5. If data shows good control, celebrate it and suggest optimizations
+6. If missing key data, specifically mention what would help their management
+7. Be encouraging but realistic about areas needing attention
+8. Reference specific numbers from their data when giving advice
+9. Suggest timing for next actions (e.g., "check glucose in 2 hours after this meal")
+10. End with a motivational insight about their progress or a gentle reminder about their health goals
+11. Include proactive suggestions based on patterns (e.g., if no activity logged, suggest movement)
+12. If they haven't logged data recently, gently encourage logging with specific suggestions
+
+TONE: Conversational, supportive, knowledgeable, and personally invested in $name's wellbeing.
+''';
+      }
         prompt = '''
 You are DiaCare AI, an expert diabetes health assistant. The user's name is $name.
 
@@ -316,6 +356,20 @@ RESPONSE STYLE: Conversational, supportive, data-driven, and actionable. Avoid g
     if (followUpQuestion != null) {
       final q = followUpQuestion.toLowerCase();
       
+      // Handle greetings and general conversation
+      if (q.contains('hi') || q.contains('hello') || q.contains('hey')) {
+        return "Hi $userName! 👋 I'm here to help with your diabetes management. How are you feeling today? Would you like me to check your recent health data or answer any questions?";
+      }
+      
+      if (q.contains('how are you') || q.contains('what\'s up')) {
+        return "I'm doing great, thanks for asking $userName! 😊 I'm here and ready to help you manage your diabetes. How are YOU feeling today? Any concerns about your glucose, meals, or medications?";
+      }
+      
+      if (q.contains('thank') || q.contains('thanks')) {
+        return "You're very welcome, $userName! 😊 I'm always happy to help you stay healthy. Is there anything else about your diabetes management I can assist you with?";
+      }
+      
+      // Handle specific health questions
       if (q.contains('why') && glucose.isNotEmpty) {
         final level = glucose.first['level'] as int? ?? 0;
         if (level > 140) {
@@ -334,6 +388,7 @@ RESPONSE STYLE: Conversational, supportive, data-driven, and actionable. Avoid g
             return "With glucose at ${level} mg/dL, immediately: 1) Have 15g fast carbs (juice, glucose tablets), 2) Wait 15 minutes, 3) Recheck glucose, 4) Have a snack if still low.";
           }
         }
+        return "Here are some general tips for $userName: 1) Check your glucose regularly, 2) Log your meals to track carb impact, 3) Stay active with daily walks, 4) Take medications as prescribed. What specific area would you like help with?";
       }
       
       if (q.contains('eat') || q.contains('food')) {
@@ -345,6 +400,7 @@ RESPONSE STYLE: Conversational, supportive, data-driven, and actionable. Avoid g
             return "Your glucose looks good for eating. Choose balanced meals with protein, healthy fats, and complex carbs. Monitor how different foods affect your levels.";
           }
         }
+        return "For diabetes-friendly eating, $userName: Focus on lean proteins, non-starchy vegetables, and complex carbs. Limit simple sugars and processed foods. Would you like specific meal suggestions?";
       }
       
       if (q.contains('water') || q.contains('hydrat')) {
@@ -359,21 +415,45 @@ RESPONSE STYLE: Conversational, supportive, data-driven, and actionable. Avoid g
         return "Proper hydration is crucial for diabetes management. Aim for 2-3L daily, spread throughout the day. Never exceed 4L daily or 1L per hour for safety.";
       }
       
-      return "I'd need more specific health data to give you a detailed answer to that question. Try logging more glucose readings, meals, or other health metrics for better insights.";
+      if (q.contains('exercise') || q.contains('activity') || q.contains('walk')) {
+        return "Great question, $userName! For diabetes: 1) Aim for 150 minutes/week of moderate activity, 2) Start with 10-15 minute walks after meals, 3) Check glucose before/after exercise, 4) Stay hydrated. Even light activity helps lower glucose!";
+      }
+      
+      // Generic helpful response for unrecognized questions
+      return "I'm here to help with your diabetes management, $userName! I can assist with glucose readings, meal planning, medication reminders, activity suggestions, and more. What specific aspect of your health would you like to discuss?";
     }
     
-    // Initial recommendation logic with more specificity
+    // Initial recommendation logic with more personalization
     List<String> recommendations = [];
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
     
-    // Glucose analysis
+    // Check if user has logged data today
+    final hasGlucoseToday = glucose.any((g) {
+      final timestamp = DateTime.parse(g['timestamp'] as String);
+      final logDate = DateTime(timestamp.year, timestamp.month, timestamp.day);
+      return logDate == today;
+    });
+    
+    final hasMealsToday = meals.any((m) {
+      final timestamp = DateTime.parse(m['timestamp'] as String);
+      final logDate = DateTime(timestamp.year, timestamp.month, timestamp.day);
+      return logDate == today;
+    });
+    
+    // Personalized greeting
+    final timeOfDay = now.hour < 12 ? 'morning' : now.hour < 17 ? 'afternoon' : 'evening';
+    recommendations.add("Good $timeOfDay, $userName! 🌟");
+    
+    // Glucose analysis with encouragement
     if (glucose.isNotEmpty) {
       final level = glucose.first['level'] as int? ?? 0;
       if (level >= 180) {
-        recommendations.add("🚨 $userName, your glucose is HIGH at ${level} mg/dL. Take action: drink water, walk for 10-15 minutes, and avoid carbs until it drops.");
+        recommendations.add("🚨 Your glucose is HIGH at ${level} mg/dL. Take action: drink water, walk for 10-15 minutes, and avoid carbs until it drops.");
       } else if (level < 70) {
-        recommendations.add("⚠️ $userName, your glucose is LOW at ${level} mg/dL. Have 15g of fast carbs immediately, wait 15 minutes, then recheck.");
+        recommendations.add("⚠️ Your glucose is LOW at ${level} mg/dL. Have 15g of fast carbs immediately, wait 15 minutes, then recheck.");
       } else if (level >= 70 && level <= 100) {
-        recommendations.add("✅ Excellent glucose control at ${level} mg/dL, $userName! Keep up whatever you're doing.");
+        recommendations.add("✅ Excellent glucose control at ${level} mg/dL! You're doing great with your diabetes management.");
       } else if (level > 100 && level < 140) {
         recommendations.add("📊 Your glucose is ${level} mg/dL - slightly elevated but manageable. Consider the timing of your last meal.");
       }
@@ -390,40 +470,39 @@ RESPONSE STYLE: Conversational, supportive, data-driven, and actionable. Avoid g
         }
       }
     } else {
-      recommendations.add("📝 Start logging glucose readings to get personalized insights, $userName!");
+      recommendations.add("📝 I'd love to help you more! Start by logging some glucose readings so I can give you personalized insights.");
     }
     
-    // Blood pressure analysis
-    if (bloodPressure != null) {
-      final systolic = bloodPressure['systolic'] as int? ?? 0;
-      final diastolic = bloodPressure['diastolic'] as int? ?? 0;
-      if (systolic >= 140 || diastolic >= 90) {
-        recommendations.add("🩺 Your BP is ${systolic}/${diastolic} - elevated. Reduce sodium, manage stress, and stay hydrated.");
-      } else if (systolic < 120 && diastolic < 80) {
-        recommendations.add("💚 Great blood pressure at ${systolic}/${diastolic} mmHg!");
-      }
+    // Proactive suggestions based on missing data
+    if (!hasGlucoseToday && glucose.isNotEmpty) {
+      recommendations.add("💡 You haven't checked your glucose today yet. Consider checking before your next meal!");
     }
     
-    // Meal analysis
-    if (meals.isNotEmpty) {
-      final totalCarbs = meals.fold<double>(0, (sum, m) => sum + (m['carbs'] as num? ?? 0));
-      if (totalCarbs > 150) {
-        recommendations.add("🍽️ High carb intake today (${totalCarbs.toInt()}g). Consider balancing with protein and fiber.");
-      } else if (meals.length < 2) {
-        recommendations.add("🍎 Log more meals for better nutrition tracking and glucose correlation analysis.");
-      }
+    if (!hasMealsToday && meals.isNotEmpty) {
+      recommendations.add("🍽️ Don't forget to log your meals today - it helps me give you better nutrition advice!");
     }
     
     // Activity encouragement
     final duration = activity['duration'] as int? ?? 0;
     if (duration == 0) {
-      recommendations.add("🚶‍♂️ Add some physical activity today - even 10-15 minutes can help with glucose control.");
+      recommendations.add("🚶‍♂️ How about a 10-15 minute walk today? Even light activity can help with glucose control!");
     } else if (duration >= 30) {
-      recommendations.add("🏃‍♂️ Great job on ${duration} minutes of activity! This helps with glucose management.");
+      recommendations.add("🏃‍♂️ Amazing job on ${duration} minutes of activity! This really helps with your diabetes management.");
     }
     
-    if (recommendations.isEmpty) {
-      return "Hi $userName! Log some health data (glucose, meals, BP) to get specific, personalized recommendations.";
+    // Blood pressure check
+    if (bloodPressure != null) {
+      final systolic = bloodPressure['systolic'] as int? ?? 0;
+      final diastolic = bloodPressure['diastolic'] as int? ?? 0;
+      if (systolic >= 140 || diastolic >= 90) {
+        recommendations.add("🩺 Your BP is ${systolic}/${diastolic} - elevated. Try reducing sodium, managing stress, and staying hydrated.");
+      } else if (systolic < 120 && diastolic < 80) {
+        recommendations.add("💚 Great blood pressure at ${systolic}/${diastolic} mmHg!");
+      }
+    }
+    
+    if (recommendations.length == 1) {
+      recommendations.add("I'm here to help you manage your diabetes better! Feel free to ask me anything about glucose, meals, medications, or activity. 😊");
     }
     
     return recommendations.take(3).join(' ');

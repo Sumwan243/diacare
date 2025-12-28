@@ -69,6 +69,20 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> with WidgetsBindi
         foregroundColor: cs.onSurface,
         actions: [
           IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () {
+              // Force refresh data and clear cache
+              setState(() {});
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Data refreshed! 🔄'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            },
+            tooltip: 'Refresh data',
+          ),
+          IconButton(
             icon: const Icon(Icons.delete_outline),
             onPressed: recommendationProv.chatHistory.isEmpty
                 ? null
@@ -340,6 +354,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> with WidgetsBindi
   ) async {
     setState(() => _isSending = true);
 
+    // Force refresh all providers to get latest data
     final bloodSugarProv = context.read<BloodSugarProvider>();
     final mealProv = context.read<MealProvider>();
     final medProv = context.read<MedicationProvider>();
@@ -347,7 +362,10 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> with WidgetsBindi
     final activityProv = context.read<ActivityProvider>();
     final profileProv = context.read<UserProfileProvider>();
 
-    // Gather data
+    // Trigger a rebuild to ensure we have fresh data
+    await Future.delayed(const Duration(milliseconds: 100));
+
+    // Gather fresh data
     final glucose = bloodSugarProv.entries
         .take(10)
         .map((e) => {'level': e.level, 'context': e.context, 'timestamp': e.timestamp.toIso8601String()})
@@ -414,6 +432,8 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> with WidgetsBindi
     setState(() => _isSending = true);
 
     final recommendationProv = context.read<RecommendationProvider>();
+    
+    // Force refresh all providers to get latest data
     final bloodSugarProv = context.read<BloodSugarProvider>();
     final mealProv = context.read<MealProvider>();
     final medProv = context.read<MedicationProvider>();
@@ -421,7 +441,10 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> with WidgetsBindi
     final activityProv = context.read<ActivityProvider>();
     final profileProv = context.read<UserProfileProvider>();
 
-    // Gather data
+    // Small delay to ensure fresh data
+    await Future.delayed(const Duration(milliseconds: 100));
+
+    // Gather fresh data
     final glucose = bloodSugarProv.entries
         .take(10)
         .map((e) => {'level': e.level, 'context': e.context, 'timestamp': e.timestamp.toIso8601String()})

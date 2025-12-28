@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 import 'package:uuid/uuid.dart';
 import '../models/blood_sugar_entry.dart';
+import '../services/smart_notification_service.dart';
 
 class BloodSugarProvider extends ChangeNotifier {
   final Box _box = Hive.box('blood_sugar_box');
@@ -22,6 +23,14 @@ class BloodSugarProvider extends ChangeNotifier {
       timestamp: timestamp,
     );
     await _box.put(id, entry.toMap());
+    
+    // Send smart notifications for dangerous glucose levels
+    if (level >= 180) {
+      SmartNotificationService().sendHighGlucoseAlert(level);
+    } else if (level <= 70) {
+      SmartNotificationService().sendLowGlucoseAlert(level);
+    }
+    
     notifyListeners();
   }
 
