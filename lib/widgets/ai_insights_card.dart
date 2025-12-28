@@ -10,6 +10,7 @@ import '../providers/activity_provider.dart';
 import '../providers/user_profile_provider.dart';
 import '../screens/profile_screen.dart';
 import '../screens/ai_insights_screen.dart';
+import '../screens/ai_assistant_screen.dart';
 import '../screens/blood_sugar_history_screen.dart';
 import '../screens/meal_tab.dart';
 import '../screens/blood_pressure_history_screen.dart';
@@ -101,7 +102,8 @@ class _AIInsightsCardState extends State<AIInsightsCard> {
               })
           .toList();
 
-      // Calculate glucose statistics
+      // Calculate glucose statistics (for future use)
+      /*
       final glucoseStats = weeklyGlucose.isNotEmpty ? {
         'weeklyCount': weeklyGlucose.length,
         'averageLevel': weeklyGlucose.map((e) => e.level).reduce((a, b) => a + b) / weeklyGlucose.length,
@@ -111,6 +113,7 @@ class _AIInsightsCardState extends State<AIInsightsCard> {
           e.level >= (userProfile?.hypoThreshold ?? 70) && 
           e.level <= (userProfile?.hyperThreshold ?? 300)).length,
       } : null;
+      */
 
       // Meals - Weekly analysis  
       final allMeals = mealProv.meals;
@@ -130,7 +133,8 @@ class _AIInsightsCardState extends State<AIInsightsCard> {
               })
           .toList();
 
-      // Calculate meal statistics
+      // Calculate meal statistics (for future use)
+      /*
       final mealStats = weeklyMeals.isNotEmpty ? {
         'weeklyCount': weeklyMeals.length,
         'avgDailyMeals': weeklyMeals.length / 7,
@@ -139,6 +143,7 @@ class _AIInsightsCardState extends State<AIInsightsCard> {
         'avgCaloriesPerMeal': weeklyMeals.fold<double>(0, (sum, m) => sum + m.totalNutrients.caloriesKcal) / weeklyMeals.length,
         'avgCarbsPerMeal': weeklyMeals.fold<double>(0, (sum, m) => sum + m.totalNutrients.carbsG) / weeklyMeals.length,
       } : null;
+      */
 
       // Medications with adherence tracking
       final meds = medProv.reminders
@@ -199,9 +204,7 @@ class _AIInsightsCardState extends State<AIInsightsCard> {
         bloodPressure: bpMap,
         activity: activity,
         intakeLogs: intakeLogs,
-        userProfile: profileMap,
-        glucoseStats: glucoseStats,
-        mealStats: mealStats,
+        userName: userProfile?.name ?? 'User',
         force: force,
       );
       
@@ -310,8 +313,27 @@ class _AIInsightsCardState extends State<AIInsightsCard> {
                 _buildReadyContent(context, theme, isDark),
               
               // Daily logging prompts (only on home screen)
-              if (widget.isCompact && hasApiKey)
+              if (widget.isCompact && hasApiKey) ...[
                 _buildDailyPrompts(context, theme, isDark),
+                const SizedBox(height: 12),
+                // Chat with AI button for home screen
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const AiAssistantScreen()),
+                    ),
+                    icon: const Icon(Icons.chat_bubble_outline, size: 16),
+                    label: const Text('Chat with AI'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFFFFB300),
+                      side: const BorderSide(color: Color(0xFFFFB300)),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -449,6 +471,26 @@ class _AIInsightsCardState extends State<AIInsightsCard> {
             'Last updated: ${provider.lastUpdatedDisplay}',
             style: theme.textTheme.bodySmall?.copyWith(
               color: isDark ? Colors.white60 : Colors.black45,
+            ),
+          ),
+        ],
+        // Chat with AI button (only on full screen)
+        if (!widget.isCompact) ...[
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AiAssistantScreen()),
+              ),
+              icon: const Icon(Icons.chat_bubble_outline),
+              label: const Text('Chat with AI Assistant'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFFB300),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
             ),
           ),
         ],

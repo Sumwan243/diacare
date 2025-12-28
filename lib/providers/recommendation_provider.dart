@@ -2,172 +2,299 @@ import 'package:diacare/services/ai_service.dart';
 import 'package:flutter/material.dart';
 
 class RecommendationProvider extends ChangeNotifier {
-  String recommendation = ""; // Start with empty recommendation
+  String recommendation = "Tap to get personalized health recommendations";
   bool isLoading = false;
   final AIService _aiService = AIService();
   DateTime? lastUpdated;
   final Duration _cacheDuration = const Duration(minutes: 15);
 
-    Future<void> fetchRecommendation({
-      List<Map<String, dynamic>>? glucose,
-      List<Map<String, dynamic>>? meals,
-      List<Map<String, dynamic>>? medications,
-      Map<String, dynamic>? bloodPressure,
-      Map<String, dynamic>? activity,
-      List<Map<String, dynamic>>? intakeLogs,
-      Map<String, dynamic>? userProfile,
-      Map<String, dynamic>? glucoseStats,
-      Map<String, dynamic>? mealStats,
-      bool force = false,
-    }) async {
-    debugPrint('AI Analysis - fetchRecommendation called with force: $force');
-    debugPrint('AI Analysis - Current recommendation: "${recommendation.isEmpty ? "EMPTY" : recommendation.substring(0, recommendation.length > 50 ? 50 : recommendation.length)}..."');
-    debugPrint('AI Analysis - isLoading: $isLoading');
-    
-    if (isLoading) {
-      debugPrint('AI Analysis - Already loading, returning early');
-      return;
+  // Chat history for follow-up questions
+  List<ChatMessage> chatHistory = [];
+  bool _isFirstFetch = true;
+
+  Future<void> fetchRecommendation({
+    List<Map<String, dynamic>>? glucose,
+    List<Map<String, dynamic>>? meals,
+    List<Map<String, dynamic>>? medications,
+    Map<String, dynamic>? bloodPressure,
+    Map<String, dynamic>? activity,
+    List<Map<String, dynamic>>? intakeLogs,
+    String? userName,
+    String? followUpQuestion,
+    bool force = false,
+  }) async {
+    if (isLoading) return;
+
+    // If this is a follow-up question, add it to chat history
+    if (followUpQuestion != null) {
+      chatHistory.add(ChatMessage(
+        role: 'user',
+        content: followUpQuestion,
+        timestamp: DateTime.now(),
+      ));
+      notifyListeners();
     }
 
-      // Rate-limit: return cached if recent and not forced
-      if (!force && lastUpdated != null) {
-        final diff = DateTime.now().difference(lastUpdated!);
-        if (diff < _cacheDuration) {
-          debugPrint('AI Analysis - Using cached recommendation (${diff.inMinutes} minutes old)');
-          return;
-        }
-      }
-    
+    // Rate-limit using cacheDuration unless forced or it's a follow-up
+    if (!force && !_isFirstFetch && followUpQuestion == null && lastUpdated != null) {
+      final diff = DateTime.now().difference(lastUpdated!);
+      if (diff < _cacheDuration) return;
+    }
+
     isLoading = true;
-    recommendation = "Analyzing your health data...";
+    recommendation = followUpQuestion != null
+        ? "Thinking..."
+        : "Analyzing your health data...";
     notifyListeners();
 
     try {
-      // Extract user profile information
-      final diabetesType = userProfile?['diabeticType'] ?? 'Type 2';
-      final age = userProfile?['age'] ?? 0;
-      final hypoThreshold = userProfile?['hypoThreshold'] ?? 70;
-      final hyperThreshold = userProfile?['hyperThreshold'] ?? 300;
-      final name = userProfile?['name'] ?? 'there';
+      // Prepare personalized data summary for AI
+      final name = userName ?? 'User';
 
-      debugPrint('AI Analysis - Diabetes Type: $diabetesType, Age: $age');
-      debugPrint('AI Analysis - Glucose entries: ${glucose?.length ?? 0}');
-      debugPrint('AI Analysis - Meals: ${meals?.length ?? 0}');
-      debugPrint('AI Analysis - Medications: ${medications?.length ?? 0}');
+      // Analyze glucose readings for alerts
+      String glucoseAnalysis = '';
+      if (glucose == null || glucose.isEmpty) {
+        glucoseAnalysis = "$name hasn't logged any glucose readings yet.";
+      } else {
+        final latestGlucose = glucose.first;
+        final level = latestGlucose['level'] as int? ?? 0;
+        final context = latestGlucose['context'] ?? 'Unknown';
 
-      // Prepare comprehensive data summary for AI with weekly analysis
-      final glucoseSummary = (glucose == null || glucose.isEmpty)
-        ? "No glucose readings recorded"
-        : glucoseStats != null 
-          ? "Weekly: ${glucoseStats['weeklyCount']} readings, avg ${glucoseStats['averageLevel']?.toInt()} mg/dL. ${glucoseStats['inRangeReadings']} in range, ${glucoseStats['highReadings']} high, ${glucoseStats['lowReadings']} low. Latest: ${glucose.first['level']} mg/dL (${glucose.first['context']})"
-          : "Latest: ${glucose.first['level']} mg/dL (${glucose.first['context']}). Recent readings: ${glucose.take(3).map((g) => '${g['level']} mg/dL').join(', ')}";
+        if (level >= 180) {
+          glucoseAnalysis = "ALERT: $name's latest glucose reading is HIGH at $level mg/dL ($context). This is above the normal range and needs attention.";
+        } else if (level > 140) {
+          glucoseAnalysis = "$name's latest glucose reading is elevated at $level mg/dL ($context).";
+        } else if (level < 70) {
+          glucoseAnalysis = "ALERT: $name's latest glucose reading is LOW at $level mg/dL ($context). This requires immediate attention.";
+        } else if (level >= 70 && level <= 100) {
+          glucoseAnalysis = "Great news: $name's glucose levels are excellent at $level mg/dL ($context).";
+        } else {
+          glucoseAnalysis = "Latest glucose reading: $level mg/dL ($context).";
+        }
 
-      final mealsSummary = (meals == null || meals.isEmpty)
-        ? "No meals logged this week"
-        : mealStats != null
-          ? "Weekly: ${mealStats['weeklyCount']} meals (${mealStats['avgDailyMeals']?.toStringAsFixed(1)} per day). Total: ${mealStats['totalCalories']?.toInt()} cal, ${mealStats['totalCarbs']?.toInt()}g carbs. Avg per meal: ${mealStats['avgCaloriesPerMeal']?.toInt()} cal, ${mealStats['avgCarbsPerMeal']?.toInt()}g carbs"
-          : "${meals.length} meal(s) logged recently. Latest: ${meals.first['name'] ?? 'meal'} (${meals.first['calories']?.toInt() ?? 0} cal, ${meals.first['carbs']?.toInt() ?? 0}g carbs)";
+        // Check for trends
+        if (glucose.length >= 2) {
+          final previousLevel = glucose[1]['level'] as int? ?? 0;
+          final difference = level - previousLevel;
+          if (difference > 50) {
+            glucoseAnalysis += " There's been a significant increase of ${difference} mg/dL from the previous reading.";
+          } else if (difference < -50) {
+            glucoseAnalysis += " There's been a significant decrease of ${difference.abs()} mg/dL from the previous reading.";
+          }
+        }
+      }
 
-      final medsSummary = (medications == null || medications.isEmpty)
-        ? "No medications tracked"
-        : "${medications.length} medication(s) tracked: ${medications.map((m) => m['name']).take(3).join(', ')}";
+      // Analyze blood pressure for alerts
+      String bpAnalysis = '';
+      if (bloodPressure == null) {
+        bpAnalysis = "No blood pressure data available.";
+      } else {
+        final systolic = bloodPressure['systolic'] as int? ?? 0;
+        final diastolic = bloodPressure['diastolic'] as int? ?? 0;
 
-      final bpSummary = (bloodPressure == null)
-        ? "No blood pressure readings this week"
-        : bloodPressure['weeklyCount'] != null && bloodPressure['weeklyCount'] > 1
-          ? "Weekly: ${bloodPressure['weeklyCount']} readings, avg ${bloodPressure['avgSystolic']?.toInt()}/${bloodPressure['avgDiastolic']?.toInt()} mmHg. Latest: ${bloodPressure['systolic']}/${bloodPressure['diastolic']} mmHg"
-          : "Latest BP: ${bloodPressure['systolic']}/${bloodPressure['diastolic']} mmHg";
+        if (systolic >= 180 || diastolic >= 120) {
+          bpAnalysis = "CRITICAL ALERT: $name's blood pressure is dangerously HIGH at $systolic/$diastolic mmHg. This is a hypertensive crisis level and requires immediate medical attention!";
+        } else if (systolic >= 140 || diastolic >= 90) {
+          bpAnalysis = "WARNING: $name's blood pressure is elevated at $systolic/$diastolic mmHg (Hypertension Stage 2).";
+        } else if (systolic >= 130 || diastolic >= 80) {
+          bpAnalysis = "CAUTION: $name's blood pressure is slightly high at $systolic/$diastolic mmHg (Hypertension Stage 1).";
+        } else if (systolic >= 120 && systolic < 130 && diastolic < 80) {
+          bpAnalysis = "$name's blood pressure is elevated at $systolic/$diastolic mmHg (Elevated range).";
+        } else if (systolic < 120 && diastolic < 80) {
+          bpAnalysis = "Great news: $name's blood pressure is excellent at $systolic/$diastolic mmHg.";
+        } else {
+          bpAnalysis = "Blood pressure reading: $systolic/$diastolic mmHg.";
+        }
+      }
 
-      final activitySummary = (activity == null || activity.isEmpty)
-        ? "No recent activity logged"
-        : "Today: ${activity['steps'] ?? 0} steps, ${activity['duration'] ?? 0} mins activity";
+      // Analyze meals
+      String mealsAnalysis = '';
+      if (meals == null || meals.isEmpty) {
+        mealsAnalysis = "$name hasn't logged any meals today.";
+      } else {
+        final totalCarbs = meals.fold<double>(0, (sum, m) => sum + (m['carbs'] as num? ?? 0));
+        mealsAnalysis = "$name has logged ${meals.length} meal(s) today with approximately ${totalCarbs.toStringAsFixed(0)}g of carbohydrates.";
 
-      final intakeSummary = (intakeLogs == null || intakeLogs.isEmpty)
-        ? "No recent medication intake confirmations"
-        : "${intakeLogs.length} medication intake confirmations in recent logs";
+        // Check for high carb intake
+        if (totalCarbs > 200) {
+          mealsAnalysis += " This is a relatively high carbohydrate intake for someone managing diabetes.";
+        }
+      }
 
-      // Get diabetes-specific context
-      final diabetesContext = _getDiabetesSpecificContext(diabetesType);
+      // Analyze medications
+      String medsAnalysis = '';
+      if (medications == null || medications.isEmpty) {
+        medsAnalysis = "No medications are being tracked.";
+      } else {
+        medsAnalysis = "$name is taking ${medications.length} medication(s): ${medications.map((m) => m['name']).join(', ')}.";
+      }
 
-      final prompt = '''
-You are a specialized diabetes health assistant providing personalized recommendations for a $diabetesType diabetes patient.
+      // Analyze activity
+      String activityAnalysis = '';
+      if (activity == null || (activity['duration'] as num? ?? 0) == 0) {
+        activityAnalysis = "No physical activity logged today.";
+      } else {
+        final duration = activity['duration'] as int? ?? 0;
+        if (duration >= 30) {
+          activityAnalysis = "Great job! $name has been active for $duration minutes today.";
+        } else {
+          activityAnalysis = "$name has logged $duration minutes of physical activity today.";
+        }
+      }
 
-PATIENT PROFILE:
-- Diabetes Type: $diabetesType
-- Age: $age years
-- Hypoglycemia threshold: $hypoThreshold mg/dL
-- Hyperglycemia threshold: $hyperThreshold mg/dL
+      // Analyze medication intake
+      String intakeAnalysis = '';
+      if (intakeLogs == null || intakeLogs.isEmpty) {
+        intakeAnalysis = "No medication intake confirmations recorded recently.";
+      } else {
+        intakeAnalysis = "${intakeLogs.length} medication dose(s) have been confirmed taken recently.";
+      }
 
-WEEKLY HEALTH DATA ANALYSIS:
-- Glucose readings: $glucoseSummary
-- Meals & Nutrition: $mealsSummary
-- Medications: $medsSummary
-- Blood pressure: $bpSummary
-- Physical activity: $activitySummary
-- Medication adherence: $intakeSummary
+      // Build the prompt with enhanced context and question analysis
+      String prompt;
+      if (followUpQuestion != null && chatHistory.length > 1) {
+        // Analyze the type of question being asked
+        final questionType = _analyzeQuestionType(followUpQuestion);
+        
+        // Follow-up question - include conversation context
+        final recentHistory = chatHistory.length > 5 
+            ? chatHistory.sublist(chatHistory.length - 5)
+            : chatHistory;
+        final historyText = recentHistory.map((m) {
+          final role = m.role == 'user' ? 'User' : 'Assistant';
+          return '$role: ${m.content}';
+        }).join('\n');
 
-DIABETES-SPECIFIC CONTEXT:
-$diabetesContext
+        prompt = '''
+You are an expert diabetes health assistant named DiaCare AI. The user's name is $name.
 
-INSTRUCTIONS:
-1. Provide a comprehensive WEEKLY health assessment covering patterns and trends
-2. Give 2-3 specific, actionable recommendations based on the weekly data patterns
-3. Use encouraging, supportive tone with emojis for visual appeal
-4. Focus on weekly trends, averages, and patterns rather than just latest readings
-5. Consider interactions between different health metrics over the week
-6. If glucose patterns show concerning trends, prioritize that but still mention other areas
-7. Keep response to 3-4 sentences maximum for readability
-8. Highlight both positive patterns and areas for improvement
+CURRENT HEALTH CONTEXT:
+- Glucose: $glucoseAnalysis
+- Blood Pressure: $bpAnalysis
+- Meals: $mealsAnalysis
+- Medications: $medsAnalysis
+- Activity: $activityAnalysis
+- Medication Intake: $intakeAnalysis
 
-Response format: Weekly assessment with trend-based recommendations. Address the user as "$name" when appropriate. Use emojis to make it visually appealing and easy to scan.
+CONVERSATION HISTORY:
+$historyText
 
-Example format: "📊 This week you averaged X mg/dL glucose with Y readings in range. 🍽️ Your Z meals show W pattern. 🚶 Consider A for better B. 💊 Keep up C."
-    ''';
+USER'S QUESTION TYPE: $questionType
+USER'S CURRENT QUESTION: "$followUpQuestion"
 
-      // Use Gemini API for recommendations with user's API key
-      final userApiKey = userProfile?['geminiApiKey'] as String?;
-      debugPrint('AI Analysis - Using API key: ${userApiKey?.isNotEmpty == true ? "Yes" : "No"}');
-      
-      final aiRecommendation = await _aiService.getRecommendation(prompt, userApiKey: userApiKey);
-      
-      debugPrint('AI Analysis - Response received: ${aiRecommendation?.isNotEmpty == true ? "Yes" : "No"}');
-      
+RESPONSE INSTRUCTIONS:
+1. DIRECTLY answer the specific question asked - don't give generic advice
+2. Use $name's actual health data to provide personalized, specific responses
+3. If asking about trends, analyze patterns in their data
+4. If asking "why" questions, explain the medical reasoning
+5. If asking "what should I do", provide specific actionable steps
+6. If asking about symptoms, relate to their current readings
+7. If asking about food/meals, reference their logged nutrition data
+8. Be conversational and supportive, not clinical
+9. Always reference their specific data points when relevant
+10. If you don't have enough data to answer specifically, say so and suggest what data would help
+
+CRITICAL: Answer the EXACT question asked. Don't deflect to general advice.
+''';
+      } else {
+        // Enhanced initial recommendation with better context analysis
+        prompt = '''
+You are DiaCare AI, an expert diabetes health assistant. The user's name is $name.
+
+COMPREHENSIVE HEALTH ANALYSIS FOR $name:
+
+GLUCOSE PATTERNS:
+$glucoseAnalysis
+
+BLOOD PRESSURE STATUS:
+$bpAnalysis
+
+NUTRITION TRACKING:
+$mealsAnalysis
+
+MEDICATION MANAGEMENT:
+$medsAnalysis
+
+PHYSICAL ACTIVITY:
+$activityAnalysis
+
+MEDICATION ADHERENCE:
+$intakeAnalysis
+
+PERSONALIZED RECOMMENDATION REQUIREMENTS:
+1. Address $name by name and make it personal
+2. PRIORITIZE urgent alerts (glucose >180 or <70, BP >140/90) with specific actions
+3. Analyze PATTERNS in their data, not just latest readings
+4. Provide 2-3 SPECIFIC, actionable recommendations based on their actual data
+5. If data shows good control, acknowledge it and suggest optimization
+6. If missing data, specifically mention what would help their management
+7. Be encouraging but realistic about areas needing attention
+8. Reference specific numbers from their data when giving advice
+9. Suggest timing for next actions (e.g., "check glucose in 2 hours")
+10. End with one motivational insight about their progress
+
+RESPONSE STYLE: Conversational, supportive, data-driven, and actionable. Avoid generic diabetes advice.
+''';
+      }
+
+      // Use Gemini API for recommendations
+      final aiRecommendation = await _aiService.getRecommendation(prompt);
+
       if (aiRecommendation != null && aiRecommendation.isNotEmpty) {
         recommendation = aiRecommendation;
-        debugPrint('AI Analysis - Recommendation: ${aiRecommendation.substring(0, aiRecommendation.length > 100 ? 100 : aiRecommendation.length)}...');
+
+        // Add AI response to chat history if it's a follow-up
+        if (followUpQuestion != null) {
+          chatHistory.add(ChatMessage(
+            role: 'assistant',
+            content: aiRecommendation,
+            timestamp: DateTime.now(),
+          ));
+        } else {
+          // Reset chat history for new initial query
+          chatHistory = [
+            ChatMessage(
+              role: 'assistant',
+              content: aiRecommendation,
+              timestamp: DateTime.now(),
+            ),
+          ];
+          _isFirstFetch = false;
+        }
       } else {
-        // Enhanced fallback with diabetes-specific recommendations
-        recommendation = _generateDiabetesSpecificRecommendation(
+        // Enhanced fallback to specific recommendation if AI fails
+        final specificRecommendation = _generateSpecificRecommendation(
           glucose ?? [], 
+          bloodPressure, 
           meals ?? [], 
-          diabetesType, 
-          hypoThreshold, 
-          hyperThreshold,
-          bloodPressure: bloodPressure,
-          activity: activity,
-          medications: medications,
-          intakeLogs: intakeLogs,
-          glucoseStats: glucoseStats,
-          mealStats: mealStats,
+          medications ?? [],
+          activity ?? {},
+          userName ?? 'User',
+          followUpQuestion,
         );
-        debugPrint('AI Analysis - Using fallback recommendation');
+        recommendation = specificRecommendation;
+        
+        if (followUpQuestion != null) {
+          chatHistory.add(ChatMessage(
+            role: 'assistant',
+            content: recommendation,
+            timestamp: DateTime.now(),
+          ));
+        }
       }
       lastUpdated = DateTime.now();
     } catch (e) {
       debugPrint('Error fetching recommendation: $e');
-      recommendation = _generateDiabetesSpecificRecommendation(
+      final specificRecommendation = _generateSpecificRecommendation(
         glucose ?? [], 
+        bloodPressure, 
         meals ?? [], 
-        userProfile?['diabeticType'] ?? 'Type 2',
-        userProfile?['hypoThreshold'] ?? 70,
-        userProfile?['hyperThreshold'] ?? 300,
-        bloodPressure: bloodPressure,
-        activity: activity,
-        medications: medications,
-        intakeLogs: intakeLogs,
-        glucoseStats: glucoseStats,
-        mealStats: mealStats,
+        medications ?? [],
+        activity ?? {},
+        userName ?? 'User',
+        followUpQuestion,
       );
+      recommendation = specificRecommendation;
       lastUpdated = lastUpdated ?? DateTime.now();
     } finally {
       isLoading = false;
@@ -175,186 +302,195 @@ Example format: "📊 This week you averaged X mg/dL glucose with Y readings in 
     }
   }
 
-  String? get lastUpdatedDisplay => lastUpdated == null ? null : lastUpdated!.toLocal().toString().split('.').first;
+  /// Generate more specific recommendations when AI is unavailable
+  String _generateSpecificRecommendation(
+    List<Map<String, dynamic>> glucose,
+    Map<String, dynamic>? bloodPressure,
+    List<Map<String, dynamic>> meals,
+    List<Map<String, dynamic>> medications,
+    Map<String, dynamic> activity,
+    String userName,
+    String? followUpQuestion,
+  ) {
+    // Handle follow-up questions with specific logic
+    if (followUpQuestion != null) {
+      final q = followUpQuestion.toLowerCase();
+      
+      if (q.contains('why') && glucose.isNotEmpty) {
+        final level = glucose.first['level'] as int? ?? 0;
+        if (level > 140) {
+          return "Your glucose of ${level} mg/dL might be elevated due to recent meals, stress, illness, or medication timing. Check what you ate in the last 2-3 hours and consider light activity.";
+        } else if (level < 80) {
+          return "Your glucose of ${level} mg/dL might be lower due to delayed meals, increased activity, or medication effects. Have a small snack if you feel symptoms.";
+        }
+      }
+      
+      if (q.contains('what should') || q.contains('what can')) {
+        if (glucose.isNotEmpty) {
+          final level = glucose.first['level'] as int? ?? 0;
+          if (level > 180) {
+            return "With glucose at ${level} mg/dL, try: 1) Drink water, 2) Take a 10-15 minute walk, 3) Check for missed medication, 4) Avoid more carbs until it comes down.";
+          } else if (level < 70) {
+            return "With glucose at ${level} mg/dL, immediately: 1) Have 15g fast carbs (juice, glucose tablets), 2) Wait 15 minutes, 3) Recheck glucose, 4) Have a snack if still low.";
+          }
+        }
+      }
+      
+      if (q.contains('eat') || q.contains('food')) {
+        if (glucose.isNotEmpty) {
+          final level = glucose.first['level'] as int? ?? 0;
+          if (level > 140) {
+            return "With your current glucose at ${level} mg/dL, focus on protein and vegetables. Avoid high-carb foods until your levels normalize. Consider lean meat, eggs, or salad. Also, drink water to help flush glucose.";
+          } else {
+            return "Your glucose looks good for eating. Choose balanced meals with protein, healthy fats, and complex carbs. Monitor how different foods affect your levels.";
+          }
+        }
+      }
+      
+      if (q.contains('water') || q.contains('hydrat')) {
+        if (glucose.isNotEmpty) {
+          final level = glucose.first['level'] as int? ?? 0;
+          if (level > 180) {
+            return "With high glucose at ${level} mg/dL, drinking water can help. Aim for 250-500ml over the next hour, but don't exceed 4L total daily. Water helps flush excess glucose.";
+          } else {
+            return "Stay hydrated! Aim for 2-3L daily, but don't exceed 4L. Spread intake throughout the day and limit single drinks to 1L max for safety.";
+          }
+        }
+        return "Proper hydration is crucial for diabetes management. Aim for 2-3L daily, spread throughout the day. Never exceed 4L daily or 1L per hour for safety.";
+      }
+      
+      return "I'd need more specific health data to give you a detailed answer to that question. Try logging more glucose readings, meals, or other health metrics for better insights.";
+    }
+    
+    // Initial recommendation logic with more specificity
+    List<String> recommendations = [];
+    
+    // Glucose analysis
+    if (glucose.isNotEmpty) {
+      final level = glucose.first['level'] as int? ?? 0;
+      if (level >= 180) {
+        recommendations.add("🚨 $userName, your glucose is HIGH at ${level} mg/dL. Take action: drink water, walk for 10-15 minutes, and avoid carbs until it drops.");
+      } else if (level < 70) {
+        recommendations.add("⚠️ $userName, your glucose is LOW at ${level} mg/dL. Have 15g of fast carbs immediately, wait 15 minutes, then recheck.");
+      } else if (level >= 70 && level <= 100) {
+        recommendations.add("✅ Excellent glucose control at ${level} mg/dL, $userName! Keep up whatever you're doing.");
+      } else if (level > 100 && level < 140) {
+        recommendations.add("📊 Your glucose is ${level} mg/dL - slightly elevated but manageable. Consider the timing of your last meal.");
+      }
+      
+      // Trend analysis if multiple readings
+      if (glucose.length >= 2) {
+        final current = glucose[0]['level'] as int? ?? 0;
+        final previous = glucose[1]['level'] as int? ?? 0;
+        final change = current - previous;
+        if (change > 50) {
+          recommendations.add("📈 Your glucose rose by ${change} mg/dL since last reading. Review recent food intake or stress levels.");
+        } else if (change < -50) {
+          recommendations.add("📉 Your glucose dropped by ${change.abs()} mg/dL. Good trend - monitor to ensure it doesn't go too low.");
+        }
+      }
+    } else {
+      recommendations.add("📝 Start logging glucose readings to get personalized insights, $userName!");
+    }
+    
+    // Blood pressure analysis
+    if (bloodPressure != null) {
+      final systolic = bloodPressure['systolic'] as int? ?? 0;
+      final diastolic = bloodPressure['diastolic'] as int? ?? 0;
+      if (systolic >= 140 || diastolic >= 90) {
+        recommendations.add("🩺 Your BP is ${systolic}/${diastolic} - elevated. Reduce sodium, manage stress, and stay hydrated.");
+      } else if (systolic < 120 && diastolic < 80) {
+        recommendations.add("💚 Great blood pressure at ${systolic}/${diastolic} mmHg!");
+      }
+    }
+    
+    // Meal analysis
+    if (meals.isNotEmpty) {
+      final totalCarbs = meals.fold<double>(0, (sum, m) => sum + (m['carbs'] as num? ?? 0));
+      if (totalCarbs > 150) {
+        recommendations.add("🍽️ High carb intake today (${totalCarbs.toInt()}g). Consider balancing with protein and fiber.");
+      } else if (meals.length < 2) {
+        recommendations.add("🍎 Log more meals for better nutrition tracking and glucose correlation analysis.");
+      }
+    }
+    
+    // Activity encouragement
+    final duration = activity['duration'] as int? ?? 0;
+    if (duration == 0) {
+      recommendations.add("🚶‍♂️ Add some physical activity today - even 10-15 minutes can help with glucose control.");
+    } else if (duration >= 30) {
+      recommendations.add("🏃‍♂️ Great job on ${duration} minutes of activity! This helps with glucose management.");
+    }
+    
+    if (recommendations.isEmpty) {
+      return "Hi $userName! Log some health data (glucose, meals, BP) to get specific, personalized recommendations.";
+    }
+    
+    return recommendations.take(3).join(' ');
+  }
 
-  String _getDiabetesSpecificContext(String diabetesType) {
-    switch (diabetesType) {
-      case 'Type 1':
-        return '''
-Type 1 diabetes requires insulin management and careful carb counting. Key focus areas:
-- Insulin timing and dosing relative to meals
-- Carbohydrate counting accuracy
-- Exercise impact on blood sugar
-- Prevention of diabetic ketoacidosis (DKA)
-- Frequent glucose monitoring (4+ times daily)
-        ''';
-      case 'Type 2':
-        return '''
-Type 2 diabetes management focuses on lifestyle and medication adherence. Key focus areas:
-- Medication adherence (metformin, etc.)
-- Weight management and portion control
-- Regular physical activity (150+ mins/week)
-- Carbohydrate moderation
-- Blood pressure and cholesterol monitoring
-        ''';
-      case 'Prediabetes':
-        return '''
-Prediabetes prevention focuses on lifestyle changes to prevent progression. Key focus areas:
-- Weight loss (5-10% of body weight)
-- Regular physical activity (150+ mins/week)
-- Reduced refined carbohydrates and sugars
-- Portion control and meal timing
-- Regular glucose monitoring
-        ''';
-      case 'Gestational':
-        return '''
-Gestational diabetes requires careful monitoring for mother and baby. Key focus areas:
-- Frequent glucose monitoring (4+ times daily)
-- Careful carbohydrate distribution across meals
-- Safe physical activity during pregnancy
-- Weight gain monitoring
-- Coordination with obstetric care
-        ''';
-      default:
-        return 'General diabetes management focusing on glucose control, medication adherence, and lifestyle factors.';
+  /// Analyze the type of question being asked to provide more targeted responses
+  String _analyzeQuestionType(String question) {
+    final q = question.toLowerCase();
+    
+    if (q.contains('why') || q.contains('reason') || q.contains('cause')) {
+      return 'EXPLANATION_REQUEST - User wants to understand the reasoning behind something';
+    } else if (q.contains('what should') || q.contains('what can') || q.contains('how do') || q.contains('how can')) {
+      return 'ACTION_REQUEST - User wants specific actionable advice';
+    } else if (q.contains('trend') || q.contains('pattern') || q.contains('over time') || q.contains('lately') || q.contains('recently')) {
+      return 'TREND_ANALYSIS - User wants analysis of patterns in their data';
+    } else if (q.contains('normal') || q.contains('good') || q.contains('bad') || q.contains('high') || q.contains('low')) {
+      return 'ASSESSMENT_REQUEST - User wants evaluation of their current status';
+    } else if (q.contains('eat') || q.contains('food') || q.contains('meal') || q.contains('diet') || q.contains('carb')) {
+      return 'NUTRITION_QUESTION - User asking about food and nutrition';
+    } else if (q.contains('exercise') || q.contains('activity') || q.contains('walk') || q.contains('workout')) {
+      return 'ACTIVITY_QUESTION - User asking about physical activity';
+    } else if (q.contains('medication') || q.contains('insulin') || q.contains('dose') || q.contains('medicine')) {
+      return 'MEDICATION_QUESTION - User asking about medications';
+    } else if (q.contains('symptom') || q.contains('feel') || q.contains('tired') || q.contains('dizzy') || q.contains('thirsty')) {
+      return 'SYMPTOM_INQUIRY - User describing or asking about symptoms';
+    } else if (q.contains('when') || q.contains('time') || q.contains('schedule')) {
+      return 'TIMING_QUESTION - User asking about timing or scheduling';
+    } else {
+      return 'GENERAL_INQUIRY - General question requiring contextual response';
     }
   }
 
-  String _generateDiabetesSpecificRecommendation(
-    List<Map<String, dynamic>> glucose, 
-    List<Map<String, dynamic>> meals,
-    String diabetesType,
-    double hypoThreshold,
-    double hyperThreshold,
-    {Map<String, dynamic>? bloodPressure,
-    Map<String, dynamic>? activity,
-    List<Map<String, dynamic>>? medications,
-    List<Map<String, dynamic>>? intakeLogs,
-    Map<String, dynamic>? glucoseStats,
-    Map<String, dynamic>? mealStats}
-  ) {
-    List<String> insights = [];
-    
-    // Analyze glucose data with weekly patterns
-    if (glucoseStats != null && glucoseStats['weeklyCount'] > 0) {
-      final weeklyCount = glucoseStats['weeklyCount'] as int;
-      final avgLevel = (glucoseStats['averageLevel'] as double).toInt();
-      final inRange = glucoseStats['inRangeReadings'] as int;
-      final highReadings = glucoseStats['highReadings'] as int;
-      final lowReadings = glucoseStats['lowReadings'] as int;
-      
-      if (lowReadings > weeklyCount * 0.2) { // More than 20% low
-        insights.add("⚠️ ${lowReadings}/${weeklyCount} readings were low this week (avg ${avgLevel} mg/dL). Review meal timing and medication dosing.");
-      } else if (highReadings > weeklyCount * 0.2) { // More than 20% high
-        insights.add("⚠️ ${highReadings}/${weeklyCount} readings were high this week (avg ${avgLevel} mg/dL). Consider reviewing carb intake and activity.");
-      } else if (inRange > weeklyCount * 0.7) { // More than 70% in range
-        insights.add("✅ Excellent glucose control this week! ${inRange}/${weeklyCount} readings in range (avg ${avgLevel} mg/dL).");
-      } else {
-        insights.add("📊 Mixed glucose patterns this week: ${inRange}/${weeklyCount} in range, avg ${avgLevel} mg/dL. Let's optimize your routine.");
-      }
-    } else if (glucose.isNotEmpty) {
-      final latest = glucose.first;
-      final level = latest['level'] as int? ?? 0;
-      
-      if (level < hypoThreshold) {
-        insights.add("⚠️ Your glucose is low ($level mg/dL). Have 15g fast carbs and recheck in 15 minutes.");
-      } else if (level > hyperThreshold) {
-        insights.add("⚠️ Your glucose is elevated ($level mg/dL). Consider light exercise and review recent meals.");
-      } else {
-        insights.add("✅ Good glucose reading ($level mg/dL).");
-      }
-    } else {
-      insights.add("📊 Start logging glucose readings for weekly pattern analysis.");
-    }
-    
-    // Analyze meal data with weekly patterns
-    if (mealStats != null && mealStats['weeklyCount'] > 0) {
-      final weeklyCount = mealStats['weeklyCount'] as int;
-      final avgDaily = (mealStats['avgDailyMeals'] as double);
-      final avgCarbs = (mealStats['avgCarbsPerMeal'] as double).toInt();
-      final totalCarbs = (mealStats['totalCarbs'] as double).toInt();
-      
-      if (avgDaily < 2.5) {
-        insights.add("🍽️ Only ${avgDaily.toStringAsFixed(1)} meals/day this week. Try for 3 regular meals for better glucose stability.");
-      } else if (avgCarbs > 60) {
-        insights.add("🍽️ High carb meals this week (avg ${avgCarbs}g per meal, ${totalCarbs}g total). Consider smaller portions.");
-      } else {
-        insights.add("🍽️ Good meal logging: ${weeklyCount} meals this week, avg ${avgCarbs}g carbs per meal.");
-      }
-    } else if (meals.isNotEmpty) {
-      final totalMeals = meals.length;
-      final totalCarbs = meals.fold<double>(0, (sum, meal) => sum + (meal['carbs'] as double? ?? 0));
-      insights.add("🍽️ You've logged $totalMeals recent meal(s) with ${totalCarbs.toInt()}g total carbs.");
-    } else {
-      insights.add("🍽️ Log your meals to track weekly nutrition patterns and carb intake.");
-    }
-    
-    // Analyze blood pressure with weekly data
-    if (bloodPressure != null) {
-      if (bloodPressure['weeklyCount'] != null && bloodPressure['weeklyCount'] > 1) {
-        final weeklyCount = bloodPressure['weeklyCount'] as int;
-        final avgSys = (bloodPressure['avgSystolic'] as double).toInt();
-        final avgDia = (bloodPressure['avgDiastolic'] as double).toInt();
-        
-        if (avgSys > 140 || avgDia > 90) {
-          insights.add("❤️ Weekly BP average is elevated ($avgSys/$avgDia from $weeklyCount readings). Consider reducing sodium and increasing activity.");
-        } else {
-          insights.add("❤️ Good weekly BP control: avg $avgSys/$avgDia from $weeklyCount readings.");
-        }
-      } else {
-        final systolic = bloodPressure['systolic'] as int? ?? 0;
-        final diastolic = bloodPressure['diastolic'] as int? ?? 0;
-        if (systolic > 140 || diastolic > 90) {
-          insights.add("❤️ Blood pressure is elevated ($systolic/$diastolic). Consider reducing sodium and increasing activity.");
-        } else {
-          insights.add("❤️ Blood pressure looks good ($systolic/$diastolic).");
-        }
-      }
-    } else {
-      insights.add("❤️ Track blood pressure weekly - it's crucial for diabetes management.");
-    }
-    
-    // Analyze activity
-    if (activity != null && activity.isNotEmpty) {
-      final steps = activity['steps'] as int? ?? 0;
-      if (steps < 5000) {
-        insights.add("🚶 Try to increase daily steps - aim for 7,000+ steps for better glucose control.");
-      } else {
-        insights.add("🚶 Great activity level with $steps steps today!");
-      }
-    } else {
-      insights.add("🚶 Add physical activity tracking - even 10 minutes of walking helps glucose control.");
-    }
-    
-    // Analyze medications
-    if (medications != null && medications.isNotEmpty) {
-      insights.add("💊 You have ${medications.length} medication(s) tracked. Consistent timing is key for $diabetesType management.");
-    } else {
-      insights.add("💊 Consider tracking medications if prescribed - adherence is crucial for diabetes control.");
-    }
-    
-    // Add diabetes-specific advice
-    switch (diabetesType) {
-      case 'Type 1':
-        insights.add("🎯 Focus on carb counting and insulin timing for optimal weekly patterns.");
-        break;
-      case 'Type 2':
-        insights.add("🎯 Maintain regular exercise and medication schedule for consistent weekly results.");
-        break;
-      case 'Prediabetes':
-        insights.add("🎯 Small weekly lifestyle improvements can prevent Type 2 diabetes progression.");
-        break;
-      case 'Gestational':
-        insights.add("🎯 Monitor weekly patterns closely for both your health and baby's development.");
-        break;
-    }
-    
-    // Combine insights into a comprehensive recommendation
-    if (insights.length <= 3) {
-      return insights.join(' ');
-    } else {
-      // For longer insights, format as a list
-      return insights.take(4).join(' ');
-    }
+  String? get lastUpdatedDisplay => lastUpdated == null ? null : lastUpdated!.toLocal().toString().split('.').first;
+
+  /// Clear chat history
+  void clearChatHistory() {
+    chatHistory = [];
+    _isFirstFetch = true;
+    notifyListeners();
+  }
+}
+
+/// Model for chat messages
+class ChatMessage {
+  final String role; // 'user' or 'assistant'
+  final String content;
+  final DateTime timestamp;
+
+  ChatMessage({
+    required this.role,
+    required this.content,
+    required this.timestamp,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'role': role,
+      'content': content,
+      'timestamp': timestamp.toIso8601String(),
+    };
+  }
+
+  factory ChatMessage.fromMap(Map<String, dynamic> map) {
+    return ChatMessage(
+      role: map['role'] as String,
+      content: map['content'] as String,
+      timestamp: DateTime.parse(map['timestamp'] as String),
+    );
   }
 }

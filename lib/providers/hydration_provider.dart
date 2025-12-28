@@ -6,12 +6,18 @@ import '../models/hydration_entry.dart';
 class HydrationProvider extends ChangeNotifier {
   final Box _box = Hive.box('hydration_box');
   int _dailyGoal = 2500; // Default 2.5L per day
+  
+  // Safety limits for water intake
+  static const int maxDailyIntake = 4000; // 4L maximum safe daily intake
+  static const int maxSingleIntake = 1000; // 1L maximum per single intake
+  static const int warningThreshold = 3500; // Warning at 3.5L
 
   int get dailyGoal => _dailyGoal;
 
   set dailyGoal(int goal) {
-    _dailyGoal = goal;
-    _box.put('daily_goal', goal);
+    // Ensure daily goal doesn't exceed safe limits
+    _dailyGoal = goal.clamp(1000, maxDailyIntake);
+    _box.put('daily_goal', _dailyGoal);
     notifyListeners();
   }
 
@@ -45,6 +51,27 @@ class HydrationProvider extends ChangeNotifier {
   }
 
   Future<void> addIntake(int amount) async {
+    // Safety check: Validate single intake amount
+    if (amount > maxSingleIntake) {
+      throw HydrationException(
+        'Single intake cannot exceed ${maxSingleIntake}ml (${(maxSingleIntake/1000).toStringAsFixed(1)}L). '
+        'Large amounts of water consumed quickly can be dangerous.',
+      );
+    }
+    
+    if (amount <= 0) {
+      throw HydrationException('Water intake amount must be greater than 0ml.');
+    }
+    
+    // Safety check: Validate daily total
+    final newDailyTotal = currentIntake + amount;
+    if (newDailyTotal > maxDailyIntake) {
+      throw HydrationException(
+        'Adding ${amount}ml would exceed the safe daily limit of ${maxDailyIntake}ml (${(maxDailyIntake/1000).toStringAsFixed(1)}L). '
+        'Excessive water intake can lead to water intoxication.',
+      );
+    }
+    
     final id = const Uuid().v4();
     final entry = HydrationEntry(
       id: id,
@@ -106,10 +133,19 @@ class HydrationProvider extends ChangeNotifier {
     return baseIntake;
   }
 
-  /// Get hydration status message
+  /// Get hydration status message with safety warnings
   String getHydrationStatus() {
     final progress = dailyProgress;
+    final intake = currentIntake;
     
+    // Safety warnings first
+    if (intake >= maxDailyIntake) {
+      return '⚠️ DANGER: You\'ve reached the maximum safe daily limit! Stop drinking water and consult a doctor if you feel unwell.';
+    } else if (intake >= warningThreshold) {
+      return '⚠️ WARNING: You\'re approaching the safe daily limit (${(intake/1000).toStringAsFixed(1)}L/${(maxDailyIntake/1000).toStringAsFixed(1)}L). Slow down your water intake.';
+    }
+    
+    // Normal status messages
     if (progress >= 1.0) {
       return 'Excellent! You\'ve reached your daily goal! 🎉';
     } else if (progress >= 0.8) {
@@ -123,6 +159,56 @@ class HydrationProvider extends ChangeNotifier {
     } else {
       return 'Start hydrating! Your health depends on it! 🚨';
     }
+  }
+
+  /// Check if current intake is approaching dangerous levels
+  bool isApproachingLimit() {
+    return currentIntake >= warningThreshold;
+  }
+
+  /// Check if current intake has reached maximum safe limit
+  bool hasReachedMaxLimit() {
+    return currentIntake >= maxDailyIntake;
+  }
+
+  /// Get remaining safe intake amount
+  int getRemainingIntake() {
+    return (maxDailyIntake - currentIntake).clamp(0, maxDailyIntake);
+  }
+
+  /// Validate if a proposed intake amount is safe
+  Map<String, dynamic> validateIntakeAmount(int amount) {
+    final newTotal = currentIntake + amount;
+    
+    if (amount > maxSingleIntake) {
+      return {
+        'isValid': false,
+        'message': 'Single intake cannot exceed ${maxSingleIntake}ml (${(maxSingleIntake/1000).toStringAsFixed(1)}L)',
+        'type': 'single_limit',
+      };
+    }
+    
+    if (newTotal > maxDailyIntake) {
+      return {
+        'isValid': false,
+        'message': 'Would exceed daily safe limit of ${maxDailyIntake}ml (${(maxDailyIntake/1000).toStringAsFixed(1)}L)',
+        'type': 'daily_limit',
+      };
+    }
+    
+    if (newTotal >= warningThreshold) {
+      return {
+        'isValid': true,
+        'message': 'Warning: Approaching daily safe limit',
+        'type': 'warning',
+      };
+    }
+    
+    return {
+      'isValid': true,
+      'message': 'Safe to add',
+      'type': 'safe',
+    };
   }
 
   /// Get weekly hydration summary
@@ -147,4 +233,14 @@ class HydrationProvider extends ChangeNotifier {
     
     return weeklyData;
   }
+}
+
+/// Exception thrown when hydration safety limits are violated
+class HydrationException implements Exception {
+  final String message;
+  
+  HydrationException(this.message);
+  
+  @override
+  String toString() => message;
 }

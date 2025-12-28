@@ -109,9 +109,24 @@ class _HydrationTabState extends State<HydrationTab> with TickerProviderStateMix
     final theme = Theme.of(context);
     final currentIntake = hydrationProv.currentIntake;
     final dailyGoal = hydrationProv.dailyGoal;
+    final isApproachingLimit = hydrationProv.isApproachingLimit();
+    final hasReachedLimit = hydrationProv.hasReachedMaxLimit();
+    
+    // Determine card color based on safety status
+    Color cardColor = theme.cardColor;
+    Color progressColor = MedicalTheme.hydrationCyan;
+    
+    if (hasReachedLimit) {
+      cardColor = Colors.red.shade50;
+      progressColor = Colors.red;
+    } else if (isApproachingLimit) {
+      cardColor = Colors.orange.shade50;
+      progressColor = Colors.orange;
+    }
     
     return Card(
       elevation: 4,
+      color: cardColor,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(20.0),
@@ -121,9 +136,47 @@ class _HydrationTabState extends State<HydrationTab> with TickerProviderStateMix
               'Daily Hydration',
               style: theme.textTheme.headlineSmall?.copyWith(
                 fontWeight: FontWeight.bold,
-                color: MedicalTheme.hydrationCyan,
+                color: progressColor,
               ),
             ),
+            
+            // Safety warning banner
+            if (hasReachedLimit || isApproachingLimit) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: hasReachedLimit ? Colors.red.shade100 : Colors.orange.shade100,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: hasReachedLimit ? Colors.red : Colors.orange,
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      hasReachedLimit ? Icons.dangerous : Icons.warning,
+                      color: hasReachedLimit ? Colors.red : Colors.orange,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        hasReachedLimit 
+                          ? 'MAXIMUM SAFE LIMIT REACHED'
+                          : 'APPROACHING SAFE LIMIT',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: hasReachedLimit ? Colors.red.shade800 : Colors.orange.shade800,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            
             const SizedBox(height: 20),
             
             // Animated Water Glass
@@ -137,7 +190,7 @@ class _HydrationTabState extends State<HydrationTab> with TickerProviderStateMix
                     painter: WaterGlassPainter(
                       fillLevel: _fillAnimation.value,
                       waveOffset: _waveAnimation.value,
-                      waterColor: MedicalTheme.hydrationCyan,
+                      waterColor: progressColor,
                     ),
                     size: const Size(200, 300),
                   );
@@ -147,12 +200,21 @@ class _HydrationTabState extends State<HydrationTab> with TickerProviderStateMix
             
             const SizedBox(height: 20),
             
-            // Progress Text
+            // Progress Text with safety info
             Text(
               '${currentIntake}ml / ${dailyGoal}ml',
               style: theme.textTheme.headlineMedium?.copyWith(
                 fontWeight: FontWeight.bold,
-                color: MedicalTheme.hydrationCyan,
+                color: progressColor,
+              ),
+            ),
+            
+            const SizedBox(height: 4),
+            
+            Text(
+              'Safe limit: ${HydrationProvider.maxDailyIntake}ml (${(HydrationProvider.maxDailyIntake/1000).toStringAsFixed(1)}L)',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
             
@@ -171,8 +233,29 @@ class _HydrationTabState extends State<HydrationTab> with TickerProviderStateMix
             LinearProgressIndicator(
               value: progress,
               backgroundColor: theme.colorScheme.surfaceContainerHighest,
-              valueColor: AlwaysStoppedAnimation<Color>(MedicalTheme.hydrationCyan),
+              valueColor: AlwaysStoppedAnimation<Color>(progressColor),
               minHeight: 8,
+            ),
+            
+            // Safety progress bar (showing progress toward max limit)
+            const SizedBox(height: 8),
+            LinearProgressIndicator(
+              value: (currentIntake / HydrationProvider.maxDailyIntake).clamp(0.0, 1.0),
+              backgroundColor: Colors.grey.shade200,
+              valueColor: AlwaysStoppedAnimation<Color>(
+                currentIntake >= HydrationProvider.warningThreshold 
+                  ? (hasReachedLimit ? Colors.red : Colors.orange)
+                  : Colors.green,
+              ),
+              minHeight: 4,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Safety: ${currentIntake}ml / ${HydrationProvider.maxDailyIntake}ml',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontSize: 11,
+              ),
             ),
           ],
         ),
@@ -216,6 +299,7 @@ class _HydrationTabState extends State<HydrationTab> with TickerProviderStateMix
                     keyboardType: TextInputType.number,
                     decoration: InputDecoration(
                       labelText: 'Custom amount (ml)',
+                      helperText: 'Max: ${HydrationProvider.maxSingleIntake}ml per intake',
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
@@ -224,8 +308,7 @@ class _HydrationTabState extends State<HydrationTab> with TickerProviderStateMix
                     onSubmitted: (value) {
                       final amount = int.tryParse(value);
                       if (amount != null && amount > 0) {
-                        hydrationProv.addIntake(amount);
-                        _showIntakeAddedSnackBar(context, amount);
+                        _addIntakeWithValidation(context, hydrationProv, amount);
                       }
                     },
                   ),
@@ -233,7 +316,8 @@ class _HydrationTabState extends State<HydrationTab> with TickerProviderStateMix
                 const SizedBox(width: 8),
                 ElevatedButton(
                   onPressed: () {
-                    // Handle custom amount submission
+                    // Handle custom amount submission with validation
+                    _showCustomAmountDialog(context, hydrationProv);
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: MedicalTheme.hydrationCyan,
@@ -250,36 +334,162 @@ class _HydrationTabState extends State<HydrationTab> with TickerProviderStateMix
   }
 
   Widget _buildQuickAddButton(BuildContext context, HydrationProvider hydrationProv, int amount, String label, IconData icon) {
+    // Check if this amount would be safe to add
+    final validation = hydrationProv.validateIntakeAmount(amount);
+    final isValid = validation['isValid'] as bool;
+    final validationType = validation['type'] as String;
+    
+    // Determine button appearance based on safety
+    Color buttonColor = MedicalTheme.hydrationCyan;
+    Color backgroundColor = MedicalTheme.hydrationCyan.withValues(alpha: 0.1);
+    
+    if (!isValid) {
+      buttonColor = Colors.red;
+      backgroundColor = Colors.red.withValues(alpha: 0.1);
+    } else if (validationType == 'warning') {
+      buttonColor = Colors.orange;
+      backgroundColor = Colors.orange.withValues(alpha: 0.1);
+    }
+    
     return Column(
       children: [
         ElevatedButton(
-          onPressed: () {
-            hydrationProv.addIntake(amount);
-            _showIntakeAddedSnackBar(context, amount);
+          onPressed: isValid ? () {
+            _addIntakeWithValidation(context, hydrationProv, amount);
+          } : () {
+            _showSafetyWarning(context, validation['message'] as String);
           },
           style: ElevatedButton.styleFrom(
-            backgroundColor: MedicalTheme.hydrationCyan.withValues(alpha: 0.1),
-            foregroundColor: MedicalTheme.hydrationCyan,
+            backgroundColor: backgroundColor,
+            foregroundColor: buttonColor,
             shape: const CircleBorder(),
             padding: const EdgeInsets.all(20),
             elevation: 0,
           ),
-          child: Icon(icon, size: 32),
+          child: Icon(
+            isValid ? icon : Icons.block,
+            size: 32,
+          ),
         ),
         const SizedBox(height: 8),
         Text(
           label,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
             fontWeight: FontWeight.bold,
+            color: isValid ? null : Colors.red,
           ),
         ),
         Text(
           '${amount}ml',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
+            color: isValid 
+              ? Theme.of(context).colorScheme.onSurfaceVariant
+              : Colors.red,
           ),
         ),
+        if (!isValid) ...[
+          const SizedBox(height: 2),
+          Icon(
+            Icons.warning,
+            size: 12,
+            color: Colors.red,
+          ),
+        ],
       ],
+    );
+  }
+
+  Future<void> _addIntakeWithValidation(BuildContext context, HydrationProvider hydrationProv, int amount) async {
+    try {
+      await hydrationProv.addIntake(amount);
+      _showIntakeAddedSnackBar(context, amount);
+    } catch (e) {
+      if (e is HydrationException) {
+        _showSafetyWarning(context, e.message);
+      } else {
+        _showErrorSnackBar(context, 'Failed to add water intake: $e');
+      }
+    }
+  }
+
+  void _showSafetyWarning(BuildContext context, String message) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.warning, color: Colors.orange),
+            const SizedBox(width: 8),
+            const Text('Safety Warning'),
+          ],
+        ),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showErrorSnackBar(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  void _showCustomAmountDialog(BuildContext context, HydrationProvider hydrationProv) {
+    final controller = TextEditingController();
+    
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Add Custom Amount'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: controller,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: 'Amount (ml)',
+                helperText: 'Max: ${HydrationProvider.maxSingleIntake}ml per intake',
+                border: const OutlineInputBorder(),
+              ),
+              autofocus: true,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Remaining safe intake today: ${hydrationProv.getRemainingIntake()}ml',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final amount = int.tryParse(controller.text);
+              if (amount != null && amount > 0) {
+                Navigator.pop(ctx);
+                _addIntakeWithValidation(context, hydrationProv, amount);
+              }
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -296,6 +506,7 @@ class _HydrationTabState extends State<HydrationTab> with TickerProviderStateMix
   Widget _buildDailyStatsCard(BuildContext context, HydrationProvider hydrationProv) {
     final theme = Theme.of(context);
     final remaining = math.max(0, hydrationProv.dailyGoal - hydrationProv.currentIntake);
+    final safeRemaining = hydrationProv.getRemainingIntake();
     final intakeCount = hydrationProv.todayIntakeCount;
     
     return Card(
@@ -316,10 +527,62 @@ class _HydrationTabState extends State<HydrationTab> with TickerProviderStateMix
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                Flexible(child: _buildStatItem(context, Icons.water_drop, '${remaining}ml', 'Remaining')),
+                Flexible(child: _buildStatItem(context, Icons.water_drop, '${remaining}ml', 'To Goal')),
+                Flexible(child: _buildStatItem(context, Icons.shield, '${safeRemaining}ml', 'Safe Remaining')),
                 Flexible(child: _buildStatItem(context, Icons.format_list_numbered, '$intakeCount', 'Times')),
-                Flexible(child: _buildStatItem(context, Icons.schedule, _getNextReminderTime(), 'Next Reminder')),
               ],
+            ),
+            
+            // Safety status message
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: hydrationProv.hasReachedMaxLimit() 
+                  ? Colors.red.shade50
+                  : hydrationProv.isApproachingLimit()
+                    ? Colors.orange.shade50
+                    : Colors.green.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: hydrationProv.hasReachedMaxLimit() 
+                    ? Colors.red.shade200
+                    : hydrationProv.isApproachingLimit()
+                      ? Colors.orange.shade200
+                      : Colors.green.shade200,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    hydrationProv.hasReachedMaxLimit() 
+                      ? Icons.dangerous
+                      : hydrationProv.isApproachingLimit()
+                        ? Icons.warning
+                        : Icons.check_circle,
+                    color: hydrationProv.hasReachedMaxLimit() 
+                      ? Colors.red
+                      : hydrationProv.isApproachingLimit()
+                        ? Colors.orange
+                        : Colors.green,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      hydrationProv.getHydrationStatus(),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: hydrationProv.hasReachedMaxLimit() 
+                          ? Colors.red.shade800
+                          : hydrationProv.isApproachingLimit()
+                            ? Colors.orange.shade800
+                            : Colors.green.shade800,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -357,12 +620,6 @@ class _HydrationTabState extends State<HydrationTab> with TickerProviderStateMix
     );
   }
 
-  String _getNextReminderTime() {
-    final now = DateTime.now();
-    final nextHour = now.add(const Duration(hours: 1));
-    return '${nextHour.hour.toString().padLeft(2, '0')}:00';
-  }
-
   Widget _buildHydrationTipsCard(BuildContext context) {
     final theme = Theme.of(context);
     
@@ -372,6 +629,14 @@ class _HydrationTabState extends State<HydrationTab> with TickerProviderStateMix
       'Keep a water bottle with you throughout the day',
       'Set regular reminders to drink water',
       'Eat water-rich foods like fruits and vegetables',
+    ];
+    
+    final safetyTips = [
+      '⚠️ Don\'t exceed 4L (4000ml) of water per day',
+      '⚠️ Limit single intake to 1L (1000ml) or less',
+      '⚠️ Spread water intake throughout the day',
+      '⚠️ Stop if you feel nauseous or dizzy from water',
+      '⚠️ Consult a doctor if you have kidney issues',
     ];
     
     return Card(
@@ -387,7 +652,7 @@ class _HydrationTabState extends State<HydrationTab> with TickerProviderStateMix
                 Icon(Icons.lightbulb_outline, color: MedicalTheme.hydrationCyan),
                 const SizedBox(width: 8),
                 Text(
-                  'Hydration Tips',
+                  'Hydration Tips & Safety',
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -395,21 +660,65 @@ class _HydrationTabState extends State<HydrationTab> with TickerProviderStateMix
               ],
             ),
             const SizedBox(height: 12),
+            
+            // Regular tips
+            Text(
+              'Healthy Habits:',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: Colors.green.shade700,
+              ),
+            ),
+            const SizedBox(height: 4),
             ...tips.map((tip) => Padding(
-              padding: const EdgeInsets.only(bottom: 8.0),
+              padding: const EdgeInsets.only(bottom: 6.0),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Icon(
                     Icons.check_circle_outline,
                     size: 16,
-                    color: MedicalTheme.hydrationCyan,
+                    color: Colors.green,
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       tip,
-                      style: theme.textTheme.bodyMedium,
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ),
+                ],
+              ),
+            )),
+            
+            const SizedBox(height: 12),
+            
+            // Safety tips
+            Text(
+              'Safety Guidelines:',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: Colors.orange.shade700,
+              ),
+            ),
+            const SizedBox(height: 4),
+            ...safetyTips.map((tip) => Padding(
+              padding: const EdgeInsets.only(bottom: 6.0),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.warning_outlined,
+                    size: 16,
+                    color: Colors.orange,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      tip,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: Colors.orange.shade800,
+                      ),
                     ),
                   ),
                 ],
