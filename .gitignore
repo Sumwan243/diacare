@@ -43,12 +43,40 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
-.kiro/specs/codebase-cleanup/tasks.md
-.kiro/specs/codebase-cleanup/design.md
-.kiro/specs/codebase-cleanup/requirements.md
-.kiro/specs/glucose-tracking-layout/design.md
-.kiro/specs/glucose-tracking-layout/requirements.md
-.kiro/specs/glucose-tracking-layout/tasks.md
-.kiro/specs/medication-adherence-tracking/requirements.md
-_update3
-_update3
+
+# API Keys and sensitive data
+*.env
+.env
+.env.local
+.env.production
+api_keys.dart
+secrets.dart
+
+# User data and logs
+*.db
+*.sqlite
+*.sqlite3
+user_data/
+logs/
+
+# Temporary files
+temp/
+tmp/
+*.tmp
+
+# OS generated files
+Thumbs.db
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+
+# Kiro specs (development artifacts)
+.kiro/specs/codebase-cleanup/
+.kiro/specs/glucose-tracking-layout/
+.kiro/specs/medication-adherence-tracking/
+
+# Update directories
+_update*
+_backup*

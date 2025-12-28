@@ -117,7 +117,6 @@ class SmartNotificationService {
         }
 
         await _notificationService.showInstantNotification(
-          id: exerciseReminderId,
           title: 'Activity Reminder',
           body: message,
         );
@@ -176,7 +175,6 @@ class SmartNotificationService {
 
       if (shouldRemind) {
         await _notificationService.showInstantNotification(
-          id: glucoseReminderId,
           title: 'Glucose Check Reminder',
           body: message,
         );
@@ -234,7 +232,6 @@ class SmartNotificationService {
 
       if (message != null) {
         await _notificationService.showInstantNotification(
-          id: mealReminderId,
           title: 'Meal Logging Reminder',
           body: message,
         );
@@ -278,7 +275,6 @@ class SmartNotificationService {
       // Send reminder if hydration is low
       if (todayIntake < 1500 && now.hour >= 14) {
         await _notificationService.showInstantNotification(
-          id: hydrationReminderId,
           title: 'Hydration Reminder',
           body: "You've had ${todayIntake}ml of water today. Stay hydrated! 💧 Proper hydration helps with glucose control.",
         );
@@ -320,7 +316,6 @@ class SmartNotificationService {
       // Send reminder if no medications logged and it's afternoon
       if (!hasTakenMedsToday && now.hour >= 14) {
         await _notificationService.showInstantNotification(
-          id: medicationReminderId,
           title: 'Medication Reminder',
           body: "Don't forget to log your medications today! 💊 Consistent tracking helps manage your diabetes effectively.",
         );
@@ -358,7 +353,6 @@ class SmartNotificationService {
     final message = encouragements[DateTime.now().millisecond % encouragements.length];
     
     await _notificationService.showInstantNotification(
-      id: 9999,
       title: 'You\'re Doing Great!',
       body: message,
     );

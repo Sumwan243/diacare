@@ -7,24 +7,18 @@ class RecommendationProvider extends ChangeNotifier {
   final AIService _aiService = AIService();
   DateTime? lastUpdated;
   final Duration _cacheDuration = const Duration(minutes: 15);
-<<<<<<< HEAD
 
   // Chat history for follow-up questions
   List<ChatMessage> chatHistory = [];
   bool _isFirstFetch = true;
 
   Future<void> fetchRecommendation({
-=======
-
-    Future<void> fetchRecommendation({
->>>>>>> 70c42b35cb2d075a6d2559ec59d609ac987976ad
     List<Map<String, dynamic>>? glucose,
     List<Map<String, dynamic>>? meals,
     List<Map<String, dynamic>>? medications,
     Map<String, dynamic>? bloodPressure,
     Map<String, dynamic>? activity,
     List<Map<String, dynamic>>? intakeLogs,
-<<<<<<< HEAD
     String? userName,
     String? followUpQuestion,
     bool force = false,
@@ -47,18 +41,6 @@ class RecommendationProvider extends ChangeNotifier {
       if (diff < _cacheDuration) return;
     }
 
-=======
-    bool force = false,
-    }) async {
-    if (isLoading) return;
-
-    // Rate-limit using cacheDuration unless forced
-    if (!force && lastUpdated != null) {
-      final diff = DateTime.now().difference(lastUpdated!);
-      if (diff < _cacheDuration) return;
-    }
-    
->>>>>>> 70c42b35cb2d075a6d2559ec59d609ac987976ad
     isLoading = true;
     recommendation = followUpQuestion != null
         ? "Thinking..."
@@ -66,7 +48,6 @@ class RecommendationProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-<<<<<<< HEAD
       // Prepare personalized data summary for AI
       final name = userName ?? 'User';
 
@@ -257,87 +238,6 @@ PERSONALIZED RECOMMENDATION REQUIREMENTS:
 TONE: Conversational, supportive, knowledgeable, and personally invested in $name's wellbeing.
 ''';
       }
-        prompt = '''
-You are DiaCare AI, an expert diabetes health assistant. The user's name is $name.
-
-COMPREHENSIVE HEALTH ANALYSIS FOR $name:
-
-GLUCOSE PATTERNS:
-$glucoseAnalysis
-
-BLOOD PRESSURE STATUS:
-$bpAnalysis
-
-NUTRITION TRACKING:
-$mealsAnalysis
-
-MEDICATION MANAGEMENT:
-$medsAnalysis
-
-PHYSICAL ACTIVITY:
-$activityAnalysis
-
-MEDICATION ADHERENCE:
-$intakeAnalysis
-
-PERSONALIZED RECOMMENDATION REQUIREMENTS:
-1. Address $name by name and make it personal
-2. PRIORITIZE urgent alerts (glucose >180 or <70, BP >140/90) with specific actions
-3. Analyze PATTERNS in their data, not just latest readings
-4. Provide 2-3 SPECIFIC, actionable recommendations based on their actual data
-5. If data shows good control, acknowledge it and suggest optimization
-6. If missing data, specifically mention what would help their management
-7. Be encouraging but realistic about areas needing attention
-8. Reference specific numbers from their data when giving advice
-9. Suggest timing for next actions (e.g., "check glucose in 2 hours")
-10. End with one motivational insight about their progress
-
-RESPONSE STYLE: Conversational, supportive, data-driven, and actionable. Avoid generic diabetes advice.
-''';
-      }
-=======
-      // Prepare data summary for AI
-      final glucoseSummary = (glucose == null || glucose.isEmpty)
-        ? "No glucose readings recorded"
-        : "Latest: ${glucose.first['level']} mg/dL (${glucose.first['context']})";
-
-      final mealsSummary = (meals == null || meals.isEmpty)
-        ? "No meals logged"
-        : "${meals.length} meal(s) logged (latest: ${meals.first['name'] ?? 'meal'})";
-
-      final medsSummary = (medications == null || medications.isEmpty)
-        ? "No medications tracked"
-        : "${medications.length} medication(s) tracked: ${medications.map((m) => m['name']).take(3).join(', ')}";
-
-      final bpSummary = (bloodPressure == null)
-        ? "No blood pressure readings"
-        : "Latest BP: ${bloodPressure['systolic']}/${bloodPressure['diastolic']} mmHg";
-
-      final activitySummary = (activity == null || activity.isEmpty)
-        ? "No recent activity logged"
-        : "Today: ${activity['duration'] ?? 0} mins activity";
-
-      final intakeSummary = (intakeLogs == null || intakeLogs.isEmpty)
-        ? "No recent medication intake logs"
-        : "${intakeLogs.length} intake confirmations in recent logs";
-
-      final prompt = '''
-    You are a helpful diabetic health assistant. Based on the user's health data, provide a brief, personalized recommendation (1-2 sentences).
-
-    Glucose readings: $glucoseSummary
-    Meals: $mealsSummary
-    Medications: $medsSummary
-    Blood pressure: $bpSummary
-    Activity: $activitySummary
-    Medication intake logs: $intakeSummary
-
-    Provide a friendly, encouraging health tip or recommendation. Be specific and actionable (one or two simple steps). If data is limited, suggest what to log next.
-
-    Privacy: Do not request personal identifiers. Use only the provided summaries.
-
-    Response format: Just the recommendation text, no quotes or formatting.
-    ''';
->>>>>>> 70c42b35cb2d075a6d2559ec59d609ac987976ad
 
       // Use Gemini API for recommendations
       final aiRecommendation = await _aiService.getRecommendation(prompt);
@@ -364,7 +264,6 @@ RESPONSE STYLE: Conversational, supportive, data-driven, and actionable. Avoid g
           _isFirstFetch = false;
         }
       } else {
-<<<<<<< HEAD
         // Enhanced fallback to specific recommendation if AI fails
         final specificRecommendation = _generateSpecificRecommendation(
           glucose ?? [], 
@@ -384,15 +283,10 @@ RESPONSE STYLE: Conversational, supportive, data-driven, and actionable. Avoid g
             timestamp: DateTime.now(),
           ));
         }
-=======
-        // Fallback to simple recommendation if AI fails
-        recommendation = _generateRecommendation(glucose ?? [], meals ?? []);
->>>>>>> 70c42b35cb2d075a6d2559ec59d609ac987976ad
       }
       lastUpdated = DateTime.now();
     } catch (e) {
       debugPrint('Error fetching recommendation: $e');
-<<<<<<< HEAD
       final specificRecommendation = _generateSpecificRecommendation(
         glucose ?? [], 
         bloodPressure, 
@@ -403,9 +297,6 @@ RESPONSE STYLE: Conversational, supportive, data-driven, and actionable. Avoid g
         followUpQuestion,
       );
       recommendation = specificRecommendation;
-=======
-      recommendation = _generateRecommendation(glucose ?? [], meals ?? []);
->>>>>>> 70c42b35cb2d075a6d2559ec59d609ac987976ad
       lastUpdated = lastUpdated ?? DateTime.now();
     } finally {
       isLoading = false;
@@ -462,34 +353,6 @@ RESPONSE STYLE: Conversational, supportive, data-driven, and actionable. Avoid g
         return "Here are some general tips for $userName: 1) Check your glucose regularly, 2) Log your meals to track carb impact, 3) Stay active with daily walks, 4) Take medications as prescribed. What specific area would you like help with?";
       }
       
-      if (q.contains('eat') || q.contains('food')) {
-        if (glucose.isNotEmpty) {
-          final level = glucose.first['level'] as int? ?? 0;
-          if (level > 140) {
-            return "With your current glucose at ${level} mg/dL, focus on protein and vegetables. Avoid high-carb foods until your levels normalize. Consider lean meat, eggs, or salad. Also, drink water to help flush glucose.";
-          } else {
-            return "Your glucose looks good for eating. Choose balanced meals with protein, healthy fats, and complex carbs. Monitor how different foods affect your levels.";
-          }
-        }
-        return "For diabetes-friendly eating, $userName: Focus on lean proteins, non-starchy vegetables, and complex carbs. Limit simple sugars and processed foods. Would you like specific meal suggestions?";
-      }
-      
-      if (q.contains('water') || q.contains('hydrat')) {
-        if (glucose.isNotEmpty) {
-          final level = glucose.first['level'] as int? ?? 0;
-          if (level > 180) {
-            return "With high glucose at ${level} mg/dL, drinking water can help. Aim for 250-500ml over the next hour, but don't exceed 4L total daily. Water helps flush excess glucose.";
-          } else {
-            return "Stay hydrated! Aim for 2-3L daily, but don't exceed 4L. Spread intake throughout the day and limit single drinks to 1L max for safety.";
-          }
-        }
-        return "Proper hydration is crucial for diabetes management. Aim for 2-3L daily, spread throughout the day. Never exceed 4L daily or 1L per hour for safety.";
-      }
-      
-      if (q.contains('exercise') || q.contains('activity') || q.contains('walk')) {
-        return "Great question, $userName! For diabetes: 1) Aim for 150 minutes/week of moderate activity, 2) Start with 10-15 minute walks after meals, 3) Check glucose before/after exercise, 4) Stay hydrated. Even light activity helps lower glucose!";
-      }
-      
       // Generic helpful response for unrecognized questions
       return "I'm here to help with your diabetes management, $userName! I can assist with glucose readings, meal planning, medication reminders, activity suggestions, and more. What specific aspect of your health would you like to discuss?";
     }
@@ -497,20 +360,6 @@ RESPONSE STYLE: Conversational, supportive, data-driven, and actionable. Avoid g
     // Initial recommendation logic with more personalization
     List<String> recommendations = [];
     final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    
-    // Check if user has logged data today
-    final hasGlucoseToday = glucose.any((g) {
-      final timestamp = DateTime.parse(g['timestamp'] as String);
-      final logDate = DateTime(timestamp.year, timestamp.month, timestamp.day);
-      return logDate == today;
-    });
-    
-    final hasMealsToday = meals.any((m) {
-      final timestamp = DateTime.parse(m['timestamp'] as String);
-      final logDate = DateTime(timestamp.year, timestamp.month, timestamp.day);
-      return logDate == today;
-    });
     
     // Personalized greeting
     final timeOfDay = now.hour < 12 ? 'morning' : now.hour < 17 ? 'afternoon' : 'evening';
@@ -528,48 +377,8 @@ RESPONSE STYLE: Conversational, supportive, data-driven, and actionable. Avoid g
       } else if (level > 100 && level < 140) {
         recommendations.add("📊 Your glucose is ${level} mg/dL - slightly elevated but manageable. Consider the timing of your last meal.");
       }
-      
-      // Trend analysis if multiple readings
-      if (glucose.length >= 2) {
-        final current = glucose[0]['level'] as int? ?? 0;
-        final previous = glucose[1]['level'] as int? ?? 0;
-        final change = current - previous;
-        if (change > 50) {
-          recommendations.add("📈 Your glucose rose by ${change} mg/dL since last reading. Review recent food intake or stress levels.");
-        } else if (change < -50) {
-          recommendations.add("📉 Your glucose dropped by ${change.abs()} mg/dL. Good trend - monitor to ensure it doesn't go too low.");
-        }
-      }
     } else {
       recommendations.add("📝 I'd love to help you more! Start by logging some glucose readings so I can give you personalized insights.");
-    }
-    
-    // Proactive suggestions based on missing data
-    if (!hasGlucoseToday && glucose.isNotEmpty) {
-      recommendations.add("💡 You haven't checked your glucose today yet. Consider checking before your next meal!");
-    }
-    
-    if (!hasMealsToday && meals.isNotEmpty) {
-      recommendations.add("🍽️ Don't forget to log your meals today - it helps me give you better nutrition advice!");
-    }
-    
-    // Activity encouragement
-    final duration = activity['duration'] as int? ?? 0;
-    if (duration == 0) {
-      recommendations.add("🚶‍♂️ How about a 10-15 minute walk today? Even light activity can help with glucose control!");
-    } else if (duration >= 30) {
-      recommendations.add("🏃‍♂️ Amazing job on ${duration} minutes of activity! This really helps with your diabetes management.");
-    }
-    
-    // Blood pressure check
-    if (bloodPressure != null) {
-      final systolic = bloodPressure['systolic'] as int? ?? 0;
-      final diastolic = bloodPressure['diastolic'] as int? ?? 0;
-      if (systolic >= 140 || diastolic >= 90) {
-        recommendations.add("🩺 Your BP is ${systolic}/${diastolic} - elevated. Try reducing sodium, managing stress, and staying hydrated.");
-      } else if (systolic < 120 && diastolic < 80) {
-        recommendations.add("💚 Great blood pressure at ${systolic}/${diastolic} mmHg!");
-      }
     }
     
     if (recommendations.length == 1) {
@@ -614,7 +423,6 @@ RESPONSE STYLE: Conversational, supportive, data-driven, and actionable. Avoid g
     _isFirstFetch = true;
     notifyListeners();
   }
-  String? get lastUpdatedDisplay => lastUpdated == null ? null : lastUpdated!.toLocal().toString().split('.').first;
 }
 
 /// Model for chat messages
