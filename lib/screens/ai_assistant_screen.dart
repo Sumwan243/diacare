@@ -561,4 +561,18 @@ class _ChatBubble extends StatelessWidget {
 
   String _formatTime(DateTime timestamp) {
     final now = DateTime.now();
-    final today = DateTime(now.year, now
+    final today = DateTime(now.year, now.month, now.day);
+    final messageDay = DateTime(timestamp.year, timestamp.month, timestamp.day);
+    final difference = today.difference(messageDay).inDays;
+
+    final timeStr = DateFormat('h:mm a').format(timestamp);
+
+    if (difference == 0) {
+      return timeStr;
+    } else if (difference == 1) {
+      return 'Yesterday, $timeStr';
+    } else {
+      return DateFormat('MMM d').format(timestamp) + ', $timeStr';
+    }
+  }
+}
