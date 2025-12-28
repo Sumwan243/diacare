@@ -53,6 +53,9 @@ class MedicationProvider extends ChangeNotifier {
     if (!r.isEnabled) return;
 
     try {
+      // Ensure notification service is initialized
+      await _notifs.init();
+      
       for (final t in r.times) {
         final baseId = baseIdForReminderTime(r.id, t);
         await _notifs.scheduleDailySeries(
@@ -63,9 +66,9 @@ class MedicationProvider extends ChangeNotifier {
           escalationDelay: const Duration(minutes: 10),
         );
       }
-      debugPrint('Successfully scheduled reminders for ${r.name}');
+      debugPrint('✅ Successfully scheduled reminders for ${r.name} at times: ${r.times.map((t) => '${t.hour}:${t.minute.toString().padLeft(2, '0')}').join(', ')}');
     } catch (e) {
-      debugPrint('Error scheduling reminders for ${r.name}: $e');
+      debugPrint('❌ Error scheduling reminders for ${r.name}: $e');
       // Don't throw - let the medication be saved even if notifications fail
     }
   }
@@ -170,14 +173,37 @@ class MedicationProvider extends ChangeNotifier {
   /// notifications are always scheduled for the next 7 days.
   Future<void> rescheduleAllReminders() async {
     try {
-      for (final reminder in reminders) {
-        if (reminder.isEnabled) {
-          await _scheduleIfEnabled(reminder);
-        }
+      debugPrint('🔄 Rescheduling all medication reminders...');
+      
+      // Ensure notification service is initialized first
+      await _notifs.init();
+      
+      final enabledReminders = reminders.where((r) => r.isEnabled).toList();
+      debugPrint('📋 Found ${enabledReminders.length} enabled medication reminders');
+      
+      for (final reminder in enabledReminders) {
+        debugPrint('⏰ Scheduling ${reminder.name} for times: ${reminder.times.map((t) => '${t.hour}:${t.minute.toString().padLeft(2, '0')}').join(', ')}');
+        await _scheduleIfEnabled(reminder);
       }
-      debugPrint('Rescheduled all enabled medication reminders');
+      
+      debugPrint('✅ Completed rescheduling all enabled medication reminders');
     } catch (e) {
-      debugPrint('Error rescheduling reminders: $e');
+      debugPrint('❌ Error rescheduling reminders: $e');
+    }
+  }
+
+  /// Test medication notifications by sending an immediate test notification
+  Future<void> testMedicationNotification(String medicationName) async {
+    try {
+      await _notifs.init();
+      await _notifs.showInstantNotification(
+        title: 'Test: Medication Reminder',
+        body: 'This is a test notification for $medicationName. If you see this, medication reminders are working!',
+      );
+      debugPrint('✅ Test medication notification sent for $medicationName');
+    } catch (e) {
+      debugPrint('❌ Failed to send test medication notification: $e');
+      rethrow;
     }
   }
 }

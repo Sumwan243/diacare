@@ -165,16 +165,21 @@ class NotificationService {
     Duration escalationDelay = const Duration(minutes: 10),
   }) async {
     try {
-      if (!_initialized) await init();
+      if (!_initialized) {
+        debugPrint('⚠️ Notification service not initialized, initializing now...');
+        await init();
+      }
       
       // Check if initialization was successful
       if (!_initialized) {
-        debugPrint('Cannot schedule notifications - service not initialized');
-        return;
+        debugPrint('❌ Cannot schedule notifications - service failed to initialize');
+        throw Exception('Notification service initialization failed');
       }
 
       final now = tz.TZDateTime.now(tz.local);
+      debugPrint('📅 Scheduling ${reminder.name} for ${time.hour}:${time.minute.toString().padLeft(2, '0')} over next $daysAhead days');
 
+      int scheduledCount = 0;
       for (int i = 0; i < daysAhead; i++) {
         final day = tz.TZDateTime(
           tz.local,
@@ -185,7 +190,10 @@ class NotificationService {
           time.minute,
         );
 
-        if (day.isBefore(now)) continue;
+        if (day.isBefore(now)) {
+          debugPrint('⏭️ Skipping past time: ${day.toString()}');
+          continue;
+        }
 
         final primaryId = _idForDay(baseId, day, kind: _Kind.primary);
         final escalationId = _idForDay(baseId, day, kind: _Kind.escalation);
@@ -218,12 +226,16 @@ class NotificationService {
           details: _escalationDetails(),
           payload: payload,
         );
+        
+        scheduledCount++;
+        debugPrint('✅ Scheduled notification for ${day.toString()} (ID: $primaryId)');
       }
       
-      debugPrint('Successfully scheduled notifications for ${reminder.name}');
+      debugPrint('🎯 Successfully scheduled $scheduledCount notifications for ${reminder.name}');
     } catch (e) {
-      debugPrint('Error scheduling medication reminders: $e');
+      debugPrint('❌ Error scheduling medication reminders for ${reminder.name}: $e');
       // Don't throw - let the medication be saved without notifications
+      rethrow;
     }
   }
 

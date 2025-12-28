@@ -63,6 +63,97 @@ class _NotificationTestScreenState extends State<NotificationTestScreen> {
     setState(() => _isLoading = false);
   }
 
+  Future<void> _testMedicationNotification() async {
+    setState(() => _isLoading = true);
+    
+    try {
+      await _notificationService.showInstantNotification(
+        title: 'Test: Medication Reminder',
+        body: 'This is a test medication reminder. If you see this, medication notifications are working!',
+      );
+      _addTestResult('✅ Test medication notification sent successfully');
+      
+      // Wait a moment then check if user saw it
+      await Future.delayed(const Duration(seconds: 2));
+      
+      if (mounted) {
+        _showMedicationNotificationCheckDialog();
+      }
+    } catch (e) {
+      _addTestResult('❌ Failed to send test medication notification: $e');
+    }
+    
+    setState(() => _isLoading = false);
+  }
+
+  void _showMedicationNotificationCheckDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Did you see the medication reminder?'),
+        content: const Text(
+          'A test medication reminder should have appeared. This tests the same notification system used for your actual medication reminders.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _addTestResult('❌ User did not see medication notification');
+              _showMedicationTroubleshootingDialog();
+            },
+            child: const Text('No, I didn\'t see it'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _addTestResult('✅ User confirmed medication notification was visible');
+            },
+            child: const Text('Yes, I saw it'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showMedicationTroubleshootingDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Medication Reminder Troubleshooting'),
+        content: const SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('If medication reminders aren\'t working, try these steps:'),
+              SizedBox(height: 12),
+              Text('1. Check notification permissions in device settings'),
+              Text('2. Disable battery optimization for DiaCare'),
+              Text('3. Enable "Allow background activity"'),
+              Text('4. For Samsung devices: Disable "Put unused apps to sleep"'),
+              Text('5. Restart the app after making changes'),
+              SizedBox(height: 12),
+              Text('The app will automatically reschedule reminders when you restart it.'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _samsungService.showOptimizationDialog(context);
+            },
+            child: const Text('Show Device Setup'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _addTestResult(String result) {
     setState(() {
       _testResults.insert(0, '${DateTime.now().toString().substring(11, 19)}: $result');
@@ -209,6 +300,26 @@ class _NotificationTestScreenState extends State<NotificationTestScreen> {
                         label: Text(_isLoading ? 'Sending...' : 'Send Test Notification'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: MedicalTheme.activityPurple,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: _isLoading ? null : _testMedicationNotification,
+                        icon: _isLoading 
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.medication),
+                        label: Text(_isLoading ? 'Sending...' : 'Test Medication Reminder'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 12),
                         ),

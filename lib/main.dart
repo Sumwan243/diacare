@@ -17,11 +17,22 @@ import 'screens/main_navigation_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize app services first
   await AppInitializer().init();
 
-  // Get MedicationProvider instance to reschedule reminders on app start
+  // Create MedicationProvider instance and reschedule reminders on app start
   final medicationProvider = MedicationProvider();
-  await medicationProvider.rescheduleAllReminders();
+  
+  // Add delay to ensure all services are fully initialized
+  await Future.delayed(const Duration(milliseconds: 500));
+  
+  try {
+    await medicationProvider.rescheduleAllReminders();
+    debugPrint('✅ App startup: Medication reminders rescheduled successfully');
+  } catch (e) {
+    debugPrint('❌ App startup: Failed to reschedule medication reminders: $e');
+  }
 
   runApp(
     MultiProvider(
@@ -84,7 +95,12 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       // Reschedule medication reminders when app resumes to ensure
       // notifications are always scheduled for the next 7 days
-      _medicationProvider?.rescheduleAllReminders();
+      debugPrint('📱 App resumed, rescheduling medication reminders...');
+      _medicationProvider?.rescheduleAllReminders().then((_) {
+        debugPrint('✅ App resume: Medication reminders rescheduled successfully');
+      }).catchError((e) {
+        debugPrint('❌ App resume: Failed to reschedule medication reminders: $e');
+      });
     }
   }
 
