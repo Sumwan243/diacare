@@ -277,10 +277,10 @@ class SmartNotificationService {
 
       // Send reminder if hydration is low
       if (todayIntake < 1500 && now.hour >= 14) {
-        await _notificationService.showNotification(
-          hydrationReminderId,
-          'Hydration Reminder',
-          "You've had ${todayIntake}ml of water today. Stay hydrated! 💧 Proper hydration helps with glucose control.",
+        await _notificationService.showInstantNotification(
+          id: hydrationReminderId,
+          title: 'Hydration Reminder',
+          body: "You've had ${todayIntake}ml of water today. Stay hydrated! 💧 Proper hydration helps with glucose control.",
         );
         
         _settingsBox.put('last_hydration_notification', now.toIso8601String());
@@ -319,10 +319,10 @@ class SmartNotificationService {
 
       // Send reminder if no medications logged and it's afternoon
       if (!hasTakenMedsToday && now.hour >= 14) {
-        await _notificationService.showNotification(
-          medicationReminderId,
-          'Medication Reminder',
-          "Don't forget to log your medications today! 💊 Consistent tracking helps manage your diabetes effectively.",
+        await _notificationService.showInstantNotification(
+          id: medicationReminderId,
+          title: 'Medication Reminder',
+          body: "Don't forget to log your medications today! 💊 Consistent tracking helps manage your diabetes effectively.",
         );
         
         _settingsBox.put('last_medication_notification', now.toIso8601String());
@@ -357,28 +357,26 @@ class SmartNotificationService {
     
     final message = encouragements[DateTime.now().millisecond % encouragements.length];
     
-    await _notificationService.showNotification(
-      9999,
-      'You\'re Doing Great!',
-      message,
+    await _notificationService.showInstantNotification(
+      id: 9999,
+      title: 'You\'re Doing Great!',
+      body: message,
     );
   }
 
   /// Send high glucose alert
   Future<void> sendHighGlucoseAlert(int level) async {
-    await _notificationService.showNotification(
-      2001,
-      'High Glucose Alert',
-      "Your glucose is ${level} mg/dL. Consider drinking water, light activity, and avoid carbs. Check again in 1 hour.",
+    await _notificationService.showHighGlucoseAlert(
+      glucoseLevel: level.toDouble(),
+      context: "Alert",
     );
   }
 
   /// Send low glucose alert
   Future<void> sendLowGlucoseAlert(int level) async {
-    await _notificationService.showNotification(
-      2002,
-      'Low Glucose Alert',
-      "Your glucose is ${level} mg/dL. Have 15g fast carbs immediately, wait 15 minutes, then recheck.",
+    await _notificationService.showLowGlucoseAlert(
+      glucoseLevel: level.toDouble(),
+      context: "Alert",
     );
   }
 }

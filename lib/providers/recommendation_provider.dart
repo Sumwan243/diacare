@@ -7,18 +7,24 @@ class RecommendationProvider extends ChangeNotifier {
   final AIService _aiService = AIService();
   DateTime? lastUpdated;
   final Duration _cacheDuration = const Duration(minutes: 15);
+<<<<<<< HEAD
 
   // Chat history for follow-up questions
   List<ChatMessage> chatHistory = [];
   bool _isFirstFetch = true;
 
   Future<void> fetchRecommendation({
+=======
+
+    Future<void> fetchRecommendation({
+>>>>>>> 70c42b35cb2d075a6d2559ec59d609ac987976ad
     List<Map<String, dynamic>>? glucose,
     List<Map<String, dynamic>>? meals,
     List<Map<String, dynamic>>? medications,
     Map<String, dynamic>? bloodPressure,
     Map<String, dynamic>? activity,
     List<Map<String, dynamic>>? intakeLogs,
+<<<<<<< HEAD
     String? userName,
     String? followUpQuestion,
     bool force = false,
@@ -41,6 +47,18 @@ class RecommendationProvider extends ChangeNotifier {
       if (diff < _cacheDuration) return;
     }
 
+=======
+    bool force = false,
+    }) async {
+    if (isLoading) return;
+
+    // Rate-limit using cacheDuration unless forced
+    if (!force && lastUpdated != null) {
+      final diff = DateTime.now().difference(lastUpdated!);
+      if (diff < _cacheDuration) return;
+    }
+    
+>>>>>>> 70c42b35cb2d075a6d2559ec59d609ac987976ad
     isLoading = true;
     recommendation = followUpQuestion != null
         ? "Thinking..."
@@ -48,6 +66,7 @@ class RecommendationProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
+<<<<<<< HEAD
       // Prepare personalized data summary for AI
       final name = userName ?? 'User';
 
@@ -276,6 +295,49 @@ PERSONALIZED RECOMMENDATION REQUIREMENTS:
 RESPONSE STYLE: Conversational, supportive, data-driven, and actionable. Avoid generic diabetes advice.
 ''';
       }
+=======
+      // Prepare data summary for AI
+      final glucoseSummary = (glucose == null || glucose.isEmpty)
+        ? "No glucose readings recorded"
+        : "Latest: ${glucose.first['level']} mg/dL (${glucose.first['context']})";
+
+      final mealsSummary = (meals == null || meals.isEmpty)
+        ? "No meals logged"
+        : "${meals.length} meal(s) logged (latest: ${meals.first['name'] ?? 'meal'})";
+
+      final medsSummary = (medications == null || medications.isEmpty)
+        ? "No medications tracked"
+        : "${medications.length} medication(s) tracked: ${medications.map((m) => m['name']).take(3).join(', ')}";
+
+      final bpSummary = (bloodPressure == null)
+        ? "No blood pressure readings"
+        : "Latest BP: ${bloodPressure['systolic']}/${bloodPressure['diastolic']} mmHg";
+
+      final activitySummary = (activity == null || activity.isEmpty)
+        ? "No recent activity logged"
+        : "Today: ${activity['duration'] ?? 0} mins activity";
+
+      final intakeSummary = (intakeLogs == null || intakeLogs.isEmpty)
+        ? "No recent medication intake logs"
+        : "${intakeLogs.length} intake confirmations in recent logs";
+
+      final prompt = '''
+    You are a helpful diabetic health assistant. Based on the user's health data, provide a brief, personalized recommendation (1-2 sentences).
+
+    Glucose readings: $glucoseSummary
+    Meals: $mealsSummary
+    Medications: $medsSummary
+    Blood pressure: $bpSummary
+    Activity: $activitySummary
+    Medication intake logs: $intakeSummary
+
+    Provide a friendly, encouraging health tip or recommendation. Be specific and actionable (one or two simple steps). If data is limited, suggest what to log next.
+
+    Privacy: Do not request personal identifiers. Use only the provided summaries.
+
+    Response format: Just the recommendation text, no quotes or formatting.
+    ''';
+>>>>>>> 70c42b35cb2d075a6d2559ec59d609ac987976ad
 
       // Use Gemini API for recommendations
       final aiRecommendation = await _aiService.getRecommendation(prompt);
@@ -302,6 +364,7 @@ RESPONSE STYLE: Conversational, supportive, data-driven, and actionable. Avoid g
           _isFirstFetch = false;
         }
       } else {
+<<<<<<< HEAD
         // Enhanced fallback to specific recommendation if AI fails
         final specificRecommendation = _generateSpecificRecommendation(
           glucose ?? [], 
@@ -321,10 +384,15 @@ RESPONSE STYLE: Conversational, supportive, data-driven, and actionable. Avoid g
             timestamp: DateTime.now(),
           ));
         }
+=======
+        // Fallback to simple recommendation if AI fails
+        recommendation = _generateRecommendation(glucose ?? [], meals ?? []);
+>>>>>>> 70c42b35cb2d075a6d2559ec59d609ac987976ad
       }
       lastUpdated = DateTime.now();
     } catch (e) {
       debugPrint('Error fetching recommendation: $e');
+<<<<<<< HEAD
       final specificRecommendation = _generateSpecificRecommendation(
         glucose ?? [], 
         bloodPressure, 
@@ -335,6 +403,9 @@ RESPONSE STYLE: Conversational, supportive, data-driven, and actionable. Avoid g
         followUpQuestion,
       );
       recommendation = specificRecommendation;
+=======
+      recommendation = _generateRecommendation(glucose ?? [], meals ?? []);
+>>>>>>> 70c42b35cb2d075a6d2559ec59d609ac987976ad
       lastUpdated = lastUpdated ?? DateTime.now();
     } finally {
       isLoading = false;
@@ -543,6 +614,7 @@ RESPONSE STYLE: Conversational, supportive, data-driven, and actionable. Avoid g
     _isFirstFetch = true;
     notifyListeners();
   }
+  String? get lastUpdatedDisplay => lastUpdated == null ? null : lastUpdated!.toLocal().toString().split('.').first;
 }
 
 /// Model for chat messages
