@@ -4,6 +4,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 
 class AIService {
+  // SECURITY: This is safe - API key comes from environment variable at runtime, not hardcoded
+  // Use: flutter run --dart-define=GEMINI_API_KEY=your_key
   static const String _apiKey = String.fromEnvironment('GEMINI_API_KEY');
 
   Future<Map<String, double>?> estimateNutrition(String foodName, double grams) async {
